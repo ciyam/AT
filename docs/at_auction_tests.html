@@ -1,0 +1,226 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Use Case Tests: Auction Agent</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Use Case Tests: Auction Agent</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Use Case Tests: Auction Agent
+-----------------------------
+
+A summary of the tests follows:
+
+Test 1: Basic auction sample.
+Test 2: Buy now for first bidder.
+Test 3: Buy now for second bidder.
+Test 4: Check all send less than the initial bid.
+
+Test 1: Basic usage.
+--------------------
+
+Sample Function Data (Test 1):
+------------------------------
+
+balance 1000
+function 020 0x0000000000000000 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000167,0x0000000000000000 false
+function 022 0x0000000000013a80,0x0000000000023a80,0x000000000ff9f9af,0x000000000ff9f9bf,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x0000000000004400,0x0100000000000000,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x4444000000000000,0x0000000000000000 false
+function 025 0 true
+function 027 0x0000000000000066,0x0000000000000068,0x000000000000095,0x0000000000000064,0x0000000000000069 false
+function 028 0x0000000000000000 true
+
+Sample Run Output (Test 1):
+---------------------------
+
+func: 20 rc: 0000000000000000
+func1: 21 with 0 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000013a80
+func1: 28 with 100 rc: 0000000000000000
+func1: 27 with 100 rc: 0000000000000066
+payout 100 to account: 00000000
+func1: 24 with 100 rc: 1111000000000000
+func1: 21 with 80512 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000023a80
+func1: 28 with 101 rc: 0000000000000000
+func1: 27 with 101 rc: 0000000000000068
+payout 102 to account: 1111000000000000
+func1: 24 with 101 rc: 2222000000000000
+func1: 21 with 146048 rc: 0000000000000066
+func1: 22 with 102 rc: 000000000ff9f9af
+func1: 23 with 102 rc: 0000000000004400
+func1: 28 with 102 rc: 0000000000000000
+func1: 27 with 102 rc: 0000000000000095
+payout 104 to account: 2222000000000000
+func1: 24 with 102 rc: 3333000000000000
+func1: 21 with 268040623 rc: 0000000000000167
+func1: 22 with 359 rc: 000000000ff9f9bf
+func1: 23 with 359 rc: 0100000000000000
+func1: 24 with 359 rc: 4444000000000000
+func1: 27 with 359 rc: 0000000000000064
+payout 100 to account: 4444000000000000
+payout 149 to account: 3333000000000000
+func1: 21 with 268040639 rc: 0000000000000000
+payout 379 to account: 286331153
+(stopped - zero balance)
+
+Test 2: Buy now for first bidder.
+---------------------------------
+
+Sample Function Data (Test 2):
+------------------------------
+
+balance 2000
+function 020 0x0000000000000000 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000067,0x0000000000000000 false
+function 022 0x0000000000013a80,0x0000000000023a80,0x000000000ff9f9af,0x000000000ff9f9bf,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x0100000000000000,0x0000000000044000,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x4444000000000000,0x0000000000000000 false
+function 025 0 true
+function 027 0x0000000000000176,0x0000000000000068,0x000000000000068,0x0000000000000064,0x0000000000000069 false
+function 028 0x0000000000000000 true
+
+Sample Run Output
+-----------------
+
+func: 20 rc: 0000000000000000
+func1: 21 with 0 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000013a80
+func1: 28 with 100 rc: 0000000000000000
+func1: 27 with 100 rc: 0000000000000176
+payout 100 to account: 00000000
+func1: 24 with 100 rc: 1111000000000000
+payout 356 to account: 11111111
+payout 18 to account: 1111000000000000
+func1: 21 with 80512 rc: 0000000000000065
+func1: 28 with 101 rc: 0000000000000000
+func1: 22 with 101 rc: 0000000000023a80
+func1: 21 with 146048 rc: 0000000000000066
+func1: 28 with 102 rc: 0000000000000000
+func1: 22 with 102 rc: 000000000ff9f9af
+func1: 21 with 268040623 rc: 0000000000000067
+func1: 28 with 103 rc: 0000000000000000
+func1: 22 with 103 rc: 000000000ff9f9bf
+func1: 21 with 268040639 rc: 0000000000000000
+payout 1482 to account: 286331153
+(stopped - zero balance)
+
+Test 3: Buy now for second bidder.
+----------------------------------
+
+Sample Function Data (Test 3):
+------------------------------
+
+balance 2000
+function 020 0x0000000000000000 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000067,0x0000000000000000 false
+function 022 0x0000000000013a80,0x0000000000023a80,0x000000000ff9f9af,0x000000000ff9f9bf,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x0100000000000000,0x0000000000044000,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x4444000000000000,0x0000000000000000 false
+function 025 0 true
+function 027 0x000000000000036,0x0000000000000189,0x000000000000189,0x0000000000000064,0x0000000000000069 false
+function 028 0x0000000000000000 true
+
+Sample Run Output (Test 3):
+---------------------------
+
+func: 20 rc: 0000000000000000
+func1: 21 with 0 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000013a80
+func1: 28 with 100 rc: 0000000000000000
+func1: 27 with 100 rc: 0000000000000036
+func1: 24 with 100 rc: 1111000000000000
+payout 54 to account: 1111000000000000
+func1: 21 with 80512 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000023a80
+func1: 28 with 101 rc: 0000000000000000
+func1: 27 with 101 rc: 0000000000000189
+payout 100 to account: 00000000
+func1: 24 with 101 rc: 2222000000000000
+payout 356 to account: 11111111
+payout 37 to account: 2222000000000000
+func1: 21 with 146048 rc: 0000000000000066
+func1: 28 with 102 rc: 0000000000000000
+func1: 22 with 102 rc: 000000000ff9f9af
+func1: 21 with 268040623 rc: 0000000000000067
+func1: 28 with 103 rc: 0000000000000000
+func1: 22 with 103 rc: 000000000ff9f9bf
+func1: 21 with 268040639 rc: 0000000000000000
+payout 1404 to account: 286331153
+(stopped - zero balance)
+
+Test 4: Check all send less than the initial bid.
+-------------------------------------------------
+
+Sample Function Data (Test 4):
+------------------------------
+
+balance 2000
+function 020 0x0000000000000000 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000067,0x0000000000000000 false
+function 022 0x0000000000013a80,0x0000000000023a80,0x000000000ff9f9af,0x000000000ff9f9bf,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x0100000000000000,0x0000000000044000,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x4444000000000000,0x0000000000000000 false
+function 025 0 true
+function 027 0x000000000000038,0x0000000000000048,0x000000000000018,0x0000000000000024,0x0000000000000069 false
+function 028 0x0000000000000000 true
+
+Sample Run Output (Test 4):
+---------------------------
+
+func: 20 rc: 0000000000000000
+func1: 21 with 0 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000013a80
+func1: 28 with 100 rc: 0000000000000000
+func1: 27 with 100 rc: 0000000000000038
+func1: 24 with 100 rc: 1111000000000000
+payout 56 to account: 1111000000000000
+func1: 21 with 80512 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000023a80
+func1: 28 with 101 rc: 0000000000000000
+func1: 27 with 101 rc: 0000000000000048
+func1: 24 with 101 rc: 2222000000000000
+payout 72 to account: 2222000000000000
+func1: 21 with 146048 rc: 0000000000000066
+func1: 22 with 102 rc: 000000000ff9f9af
+func1: 23 with 102 rc: 0100000000000000
+func1: 24 with 102 rc: 3333000000000000
+func1: 27 with 102 rc: 0000000000000018
+payout 24 to account: 3333000000000000
+payout 100 to account: 00000000
+func1: 21 with 268040623 rc: 0000000000000067
+func1: 28 with 103 rc: 0000000000000000
+func1: 22 with 103 rc: 000000000ff9f9bf
+func1: 21 with 268040639 rc: 0000000000000000
+payout 1698 to account: 286331153
+(stopped - zero balance)
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

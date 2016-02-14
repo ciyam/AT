@@ -1,0 +1,264 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Use Case: Auction Agent</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Use Case: Auction Agent</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Use Case: Auction Agent
+-----------------------
+
+An Auction Agent is an AT that will allow people to send funds which will be refunded back to them (minus a
+minimum fee) if someone else sends more. A "buy now" price would become an instant "auction finish" and the
+actual auction finish will need to use some "random" data so that the exact end of the auction isn't easily
+manipulated. If bid is more than "buy now" the difference is refunded.
+
+Variables
+---------
+
+@00 ==&gt; @timestamp
+@01 ==&gt; @decision_time
+@02 ==&gt; @txid
+@03 ==&gt; @balance
+@04 ==&gt; @tx_info
+@05 ==&gt; @buy_now
+@06 ==&gt; @target_acc
+@07 ==&gt; @best_bid
+@08 ==&gt; @tx_source
+@09 ==&gt; @best_account
+
+Functions
+----------
+
+20 (0x14) = get a time stamp value for the last block in the blockchain
+21 (0x15) = get txid for the first tx after the provided time stamp
+22 (0x16) = get a time stamp value for a given txid
+23 (0x17) = get ticket for a given txid
+24 (0x18) = get source account/address for a given txid
+26 (0x1a) = pay account balance to a given account/address
+27 (0x1b) = get funds amount for a given txid
+28 (0x1c) = get tx type and subtype for a given txid
+31 (0x1f) = pay given funds amount to a given account/address
+
+Sample Function Data:
+---------------------
+
+balance 1000
+function 020 0x0000000000000000 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000167,0x0000000000000000 false
+function 022 0x0000000000013a80,0x0000000000023a80,0x000000000ff9f9af,0x000000000ff9f9bf,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x0000000000004400,0x0100000000000000,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x4444000000000000,0x0000000000000000 false
+function 025 0 true
+function 027 0x0000000000000066,0x0000000000000068,0x000000000000095,0x0000000000000064,0x0000000000000069 false
+function 028 0x0000000000000000 true
+
+Sample Run Output:
+------------------
+
+func: 20 rc: 0000000000000000
+func1: 21 with 0 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000013a80
+func1: 28 with 100 rc: 0000000000000000
+func1: 27 with 100 rc: 0000000000000066
+payout 100 to account: 00000000
+func1: 24 with 100 rc: 1111000000000000
+func1: 21 with 80512 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000023a80
+func1: 28 with 101 rc: 0000000000000000
+func1: 27 with 101 rc: 0000000000000068
+payout 102 to account: 1111000000000000
+func1: 24 with 101 rc: 2222000000000000
+func1: 21 with 146048 rc: 0000000000000066
+func1: 22 with 102 rc: 000000000ff9f9af
+func1: 23 with 102 rc: 0000000000004400
+func1: 28 with 102 rc: 0000000000000000
+func1: 27 with 102 rc: 0000000000000095
+payout 104 to account: 2222000000000000
+func1: 24 with 102 rc: 3333000000000000
+func1: 21 with 268040623 rc: 0000000000000167
+func1: 22 with 359 rc: 000000000ff9f9bf
+func1: 23 with 359 rc: 0100000000000000
+func1: 24 with 359 rc: 4444000000000000
+func1: 27 with 359 rc: 0000000000000064
+payout 100 to account: 4444000000000000
+payout 149 to account: 3333000000000000
+func1: 21 with 268040639 rc: 0000000000000000
+payout 379 to account: 286331153
+(stopped - zero balance)
+
+Script Assembly
+---------------
+
+if @timestamp not zero goto loop                         1e0000000041
+get last block timestamp and put in @timestamp           35140000000000
+set @decision_time                                       0101000000c55d0a0000000000
+set @buy_now (to 10000)                                  01050000006401000000000000
+set @target_acc                                          01060000001111111100000000
+set @best_bid to (100)                                   01070000006400000000000000
+
+:loop
+get tx at after @timestamp and store in @txid            3615000200000000000000
+if @txid is zero finish                                  2602000000
+
+get timestamp for @txid and store in @timestamp          3616000000000002000000
+if @timestamp &lt; @decision_time goto no-decision          2000000000010000000f
+goto decision                                            1a6d010000
+
+:no-decision
+get type for @txid and store in @tx_info                 361c000400000002000000
+if @tx_info is zero goto continue                        1b040000000b
+goto loop                                                1a41000000
+
+:continue
+get amount for @txid and store in @tx_info               361b000400000002000000
+if @tx_info &lt;= @best_bid goto :refund-bid                22040000000700000038
+
+send @best_bid to @best_account                          341f000700000009000000
+set @best_bid to @tx_info                                020700000004000000
+get account for @tx_id and store in @best_account        3618000900000002000000
+
+if @best_bid &gt;= @buy_now goto buynow                     2107000000050000002a
+goto loop                                                1a41000000
+
+:refund-bid
+get account for @tx_id and store in @tx_source           3618000800000002000000
+send @tx_info to @tx_source                              341f000400000008000000
+goto loop                                                1a41000000
+
+:buynow
+send @buy_now to @target_acc                             341f000500000006000000
+if @best_bid == @buy_now goto payout                     23070000000500000027
+set @tx_info to @best_bid                                020400000007000000
+subtract @buy_now to @tx_info                            07040000000500000000
+
+:payout
+send @tx_info to @best_account                           341f000400000009000000
+
+:refund loop
+get tx after @timestamp and store in @txid               3615000200000000000000
+if @txid is non zero goto refund cont                    1e020000000f
+set pcs                                                  30
+send balance to target_acc                               331a0006000000
+finish                                                   28
+
+:refund cont
+get type for @txid and store in @tx_info                 361c000400000002000000
+if @tx_info is zero go to skip                           1b0400000027
+
+get account for @txid and put in @tx_source              3618000800000002000000
+get amount for @txid and put in @tx_info                 361b000400000002000000
+send @tx_info to @tx_source                              341f000400000008000000
+
+:skip
+get timestamp for @txid and store in @timestamp          3616000000000002000000
+goto refund loop                                         1a11010000
+
+:decision
+get rand for txid and store in @tx_info                  3617000400000002000000
+AND 1 to @tx_info                                        0b0400000001000000
+if @tx_info is zero goto finalize                        1b040000000b
+goto no-decision                                         1a6b000000
+
+:finalize
+get account for @txid and put in @tx_source              3618000800000002000000
+get amount for @txid and put in @tx_info                 361b000400000002000000
+send @tx_info to @tx_source                              341f000400000008000000
+send @best_bid to @best_account                          341f000700000009000000
+goto refund loop                                         1a01110000
+
+Assembly Code
+-------------
+
+00000000* BNZ $00000000 :00000041
+00000006  FUN @00000000 20
+0000000d  SET @00000001 #00000000000a5dc5
+0000001a  SET @00000005 #0000000000000164
+00000027  SET @00000006 #0000000011111111
+00000034  SET @00000007 #0000000000000064
+00000041  FUN @00000002 21 $00000000
+0000004c  FIZ @00000002
+00000051  FUN @00000000 22 $00000002
+0000005c  BLT $00000000 $00000001 :0000006b
+00000066  JMP :0000016d
+0000006b  FUN @00000004 28 $00000002
+00000076  BZR $00000004 :00000081
+0000007c  JMP :00000041
+00000081  FUN @00000004 27 $00000002
+0000008c  BLE $00000004 $00000007 :000000c4
+00000096  FUN 31 $00000007 $00000009
+000000a1  SET @00000007 $00000004
+000000aa  FUN @00000009 24 $00000002
+000000b5  BGE $00000007 $00000005 :000000df
+000000bf  JMP :00000041
+000000c4  FUN @00000008 24 $00000002
+000000cf  FUN 31 $00000004 $00000008
+000000da  JMP :00000041
+000000df  FUN 31 $00000005 $00000006
+000000ea  BEQ $00000007 $00000005 :00000111
+000000f4  SET @00000004 $00000007
+000000fd  SUB @00000004 $00000005
+00000106  FUN 31 $00000004 $00000009
+00000111  FUN @00000002 21 $00000000
+0000011c  BNZ $00000002 :0000012b
+00000122  PCS
+00000123  FUN 26 $00000006
+0000012a  FIN
+0000012b  FUN @00000004 28 $00000002
+00000136  BZR $00000004 :0000015d
+0000013c  FUN @00000008 24 $00000002
+00000147  FUN @00000004 27 $00000002
+00000152  FUN 31 $00000004 $00000008
+0000015d  FUN @00000000 22 $00000002
+00000168  JMP :00000111
+0000016d  FUN @00000004 23 $00000002
+00000178  AND @00000004 $0000000000000001
+00000181  BZR $00000004 :0000018c
+00000187  JMP :0000006b
+0000018c  FUN @00000008 24 $00000002
+00000197  FUN @00000004 27 $00000002
+000001a2  FUN 31 $00000004 $00000008
+000001ad  FUN 31 $00000007 $00000009
+000001b8  JMP :00000111
+
+Machine Code
+------------
+
+1e0000000041351400000000000101000000c55d0a00000000000105000000640100000000000001060000001111111100000000
+010700000064000000000000003615000200000000000000260200000036160000000000020000002000000000010000000f1a6d
+010000361c0004000000020000001b040000000b1a41000000361b00040000000200000022040000000700000038341f00070000
+000900000002070000000400000036180009000000020000002107000000050000002a1a41000000361800080000000200000034
+1f0004000000080000001a41000000341f0005000000060000002307000000050000002702040000000700000007040000000500
+0000341f00040000000900000036150002000000000000001e020000000f30331a000600000028361c0004000000020000001b04
+000000273618000800000002000000361b000400000002000000341f00040000000800000036160000000000020000001a110100
+0036170004000000020000000b04000000010000001b040000000b1a6b0000003618000800000002000000361b00040000000200
+0000341f000400000008000000341f0007000000090000001a11010000
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

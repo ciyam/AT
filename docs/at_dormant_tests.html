@@ -1,0 +1,186 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Use Case Tests: Dormant Funds Transfer</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Use Case Tests: Dormant Funds Transfer</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Use Case Tests: Dormant Funds Transfer
+--------------------------------------
+
+A summary of the tests follows:
+
+Test 1 - Check transfer succeed to the account set by AM.
+Test 2 - Check transfer succeed to default account without AM.
+Test 3 - Check don't transfer when AT sent tx before a given time.
+Test 4 - Check transfer succeed to default account with other's AM.
+Test 5 - Check no function data.
+
+Test 1 (Check transfer succeed to the account set by AM)
+--------------------------------------------------------
+
+Sample Function Data (Test 1)
+-----------------------------
+
+function 020 0x0000000000012345 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x0000000000012345,0x0000000000012345,0x00000000000a5dc8,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 028 0x0000000000000000,0x0000000100000002,0x0000000000000000,0x0000000000000000 false
+function 029 0x2222000000000000 true
+function 030 0x0000000000000000,0x1111012300000000,0x0000000000000000,0x0000000000000000 false
+
+Sample Run Output (Test 1):
+---------------------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000012345
+func1: 28 with 100 rc: 0000000000000000
+func1: 21 with 74565 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000012345
+func1: 28 with 101 rc: 0000000100000002
+func: 29 rc: 2222000000000000
+func1: 24 with 101 rc: 2222000000000000
+func2: 30 with 101 and 0 rc: 1111012300000000
+func1: 21 with 74565 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc8
+func1: 28 with 102 rc: 0000000000000000
+payout 56 to account: 1229765423084339200
+(stopped - zero balance)
+
+Test 2 (Check transfer succeed to default account without AM)
+-------------------------------------------------------------
+
+Sample Function Data (Test 2)
+-----------------------------
+
+function 020 0x0000000000012345 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x0000000000012345,0x0000000000012345,0x00000000000a5dc8,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 028 0x0000000000000000,0x0000000100000002,0x0000000000000000,0x0000000000000000 false
+function 029 0x2222000000000000 true
+
+Sample Run Output (Test 2):
+---------------------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000012345
+func1: 28 with 100 rc: 0000000000000000
+func1: 21 with 74565 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000012345
+func1: 28 with 101 rc: 0000000100000002
+func: 29 rc: 2222000000000000
+func1: 24 with 101 rc: 2222000000000000
+func2: 30 with 101 and 0 rc: 0000000000000000
+func1: 21 with 74565 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc8
+func1: 28 with 102 rc: 0000000000000000
+payout 57 to account: 286331153
+(stopped - zero balance)
+
+Test 3 (Check don't transfer when AT sent tx before a given time)
+-----------------------------------------------------------------
+
+Sample Function Data (Test 3)
+-----------------------------
+
+function 020 0x0000000000012345 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x0000000000012345,0x0000000000012346,0x0000000000012347,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 028 0x0000000000000000,0x0000000100000002,0x0000000000000000,0x0000000000000000 false
+function 029 0x2222000000000000 true
+function 030 0x0000000000000000,0x1111012300000000,0x0000000000000000,0x0000000000000000 false
+
+Sample Run Output (Test 3):
+---------------------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000012345
+func1: 28 with 100 rc: 0000000000000000
+func1: 21 with 74565 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000012346
+func1: 28 with 101 rc: 0000000100000002
+func: 29 rc: 2222000000000000
+func1: 24 with 101 rc: 2222000000000000
+func2: 30 with 101 and 0 rc: 1111012300000000
+func1: 21 with 74566 rc: 0000000000000066
+func1: 22 with 102 rc: 0000000000012347
+func1: 28 with 102 rc: 0000000000000000
+func1: 21 with 74567 rc: 0000000000000000
+(finished)
+
+Test 4 (Check transfer succeed to default account with others'AM)
+-----------------------------------------------------------------
+
+Sample Function Data (Test 4)
+-----------------------------
+balance 1000
+function 020 0x0000000000012345 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x0000000000012345,0x0000000000012345,0x00000000000a5dc8,0x0000000000000000 false
+function 024 0x1111000000000000,0x3333000000000000,0x4444000000000000,0x0000000000000000 false
+function 028 0x0000000000000000,0x0000000100000002,0x0000000000000000,0x0000000000000000 false
+function 029 0x2222000000000000 true
+function 030 0x1111455000000000,0x1111112300000000,0x0000000000000000,0x0000000000000000 false
+
+Sample Run Output (Test 4):
+---------------------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000012345
+func1: 28 with 100 rc: 0000000000000000
+func1: 21 with 74565 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000012345
+func1: 28 with 101 rc: 0000000100000002
+func: 29 rc: 2222000000000000
+func1: 24 with 101 rc: 3333000000000000
+func1: 21 with 74565 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc8
+func1: 28 with 102 rc: 0000000000000000
+payout 959 to account: 286331153
+(stopped - zero balance)
+
+Test 5 (Check no function data)
+-------------------------------
+
+Sample Run Output (Test 5):
+---------------------------
+
+func: 20 rc: 0000000000000000
+func1: 21 with 0 rc: 0000000000000000
+(finished)
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

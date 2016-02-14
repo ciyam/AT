@@ -1,0 +1,272 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Use Case Tests: Crowdfunding Agent</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Use Case Tests: Crowdfunding Agent</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Use Case Tests: Crowdfunding Agent
+----------------------------------
+
+A summary of the tests follows:
+
+Test 1 - Check refund to one account.
+Test 2 - Check funding succeed, by set decision_amount to 0x20.
+Test 3 - Check refund to multi-account.
+Test 4 - Check @txid is zero.
+Test 5 - Check tx type is non-zero.
+Test 6 - Check no function data.
+
+Test 1 (Check refund to one account)
+------------------------------------
+
+Sample Function Data (Test 1)
+-----------------------------
+
+function 020 0x0000000000012345 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x00000000000a5da8,0x00000000000a5db8,0x00000000000a5dc8,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x000000000000ffff,0x0000000000000000 false
+function 025 0 true
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 027 0x0000000000000100,0x0000000000000100,0x0000000000000100,0x0000000000000000 false
+
+Sample Run Output (Test 1):
+---------------------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 00000000000a5da8
+func1: 21 with 679336 rc: 0000000000000065
+func1: 22 with 101 rc: 00000000000a5db8
+func1: 21 with 679352 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc8
+(resetting function data)
+func: 25 rc: 0000000000000051
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 00000000000a5da8
+func1: 28 with 100 rc: 0000000000000000
+func1: 24 with 100 rc: 1111000000000000
+func1: 27 with 100 rc: 0000000000000100
+payout 70 to account: 1111000000000000
+(stopped - zero balance)
+
+Test 2 (Check funding succeed, by set decision_amount to 0x20)
+--------------------------------------------------------------
+
+Assembly Code (Test 2):
+-----------------------
+
+00000000* BNZ $00000000 :0000003d
+00000006  FUN @00000000 20
+0000000d  SET @00000009 $00000000
+00000016  SET @00000001 #00000000000a5dc5
+00000023  SET @00000005 #0000000000000020
+00000030  SET @00000006 #0000000011111111
+0000003d  FUN @00000002 21 $00000000
+00000048  FUN @00000000 22 $00000002
+00000053  BGT $00000000 $00000001 :00000067
+0000005d  FIZ @00000002
+00000062  JMP :0000003d
+00000067  FUN @00000007 25
+0000006e  SET @00000000 $00000009
+00000077  BGT $00000005 $00000007 :0000008a
+00000081  PCS
+00000082  FUN 26 $00000006
+00000089  FIN
+0000008a  PCS
+0000008b  FUN @00000002 21 $00000000
+00000096  FUN @00000000 22 $00000002
+000000a1  FIZ @00000002
+000000a6  FUN @00000004 28 $00000002
+000000b1  BNZ $00000004 :000000d8
+000000b7  FUN @00000008 24 $00000002
+000000c2  FUN @00000004 27 $00000002
+000000cd  FUN 31 $00000004 $00000008
+000000d8  JMP :0000008a
+
+Machine Code (Test 2):
+----------------------
+
+1e000000003d351400000000000209000000000000000101000000c55d0a00000000000105000000200000000000000001060000
+001111111100000000361500020000000000000036160000000000020000001f00000000010000001426020000001a3d00000035
+1900070000000200000000090000001f05000000070000001330331a000600000028303615000200000000000000361600000000
+00020000002602000000361c0004000000020000001e04000000273618000800000002000000361b000400000002000000341f00
+04000000080000001a8a000000
+
+Sample Function Data (Test 2)
+-----------------------------
+
+function 020 0x0000000000012345 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x00000000000a5da8,0x00000000000a5db8,0x00000000000a5dc8,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x000000000000ffff,0x0000000000000000 false
+function 025 0 true
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 027 0x0000000000000100,0x0000000000000100,0x0000000000000100,0x0000000000000000 false
+
+Sample Run Output (Test 2):
+---------------------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 00000000000a5da8
+func1: 21 with 679336 rc: 0000000000000065
+func1: 22 with 101 rc: 00000000000a5db8
+func1: 21 with 679352 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc8
+(resetting function data)
+func: 25 rc: 0000000000000051
+payout 77 to account: 286331153
+(stopped - zero balance)
+
+Test 3 (Check refund to multi-account)
+-------------------------------------
+
+Sample Function Data (Test 3)
+-----------------------------
+
+function 020 0x0000000000012345 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x00000000000a5da8,0x00000000000a5db8,0x00000000000a5dc8,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x000000000000ffff,0x0000000000000000 false
+function 025 0 true
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 027 0x0000000000000010,0x0000000000000011,0x0000000000000012,0x0000000000000000 false
+
+Sample Run Output (Test 3):
+---------------------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 00000000000a5da8
+func1: 21 with 679336 rc: 0000000000000065
+func1: 22 with 101 rc: 00000000000a5db8
+func1: 21 with 679352 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc8
+(resetting function data)
+func: 25 rc: 0000000000000051
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 00000000000a5da8
+func1: 28 with 100 rc: 0000000000000000
+func1: 24 with 100 rc: 1111000000000000
+func1: 27 with 100 rc: 0000000000000010
+payout 16 to account: 1111000000000000
+func1: 21 with 679336 rc: 0000000000000065
+func1: 22 with 101 rc: 00000000000a5db8
+func1: 28 with 101 rc: 0000000000000000
+func1: 24 with 101 rc: 2222000000000000
+func1: 27 with 101 rc: 0000000000000011
+payout 17 to account: 2222000000000000
+func1: 21 with 679352 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc8
+func1: 28 with 102 rc: 0000000000000000
+func1: 24 with 102 rc: 3333000000000000
+func1: 27 with 102 rc: 0000000000000012
+payout 17 to account: 3333000000000000
+(stopped - zero balance)
+
+Test 4 (Check @txid is zero)
+-----------------------------
+
+Sample Function Data (Test 4)
+-----------------------------
+
+function 020 0x0000000000012345 true
+function 021 0x0000000000000000 false
+function 022 0x00000000000a5da8,0x00000000000a5db8,0x00000000000a5dc8,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x000000000000ffff,0x0000000000000000 false
+function 025 0 true
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 027 0x0000000000000100,0x0000000000000100,0x0000000000000100,0x0000000000000000 false
+
+Sample Run Output (Test 4):
+---------------------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000000
+func1: 22 with 0 rc: 00000000000a5da8
+(finished)
+
+Test 5 (Check tx type is non-zero)
+----------------------------------
+
+Sample Function Data (Test 5)
+-----------------------------
+
+function 020 0x0000000000012345 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x00000000000a5da8,0x00000000000a5db8,0x00000000000a5dc8,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x000000000000ffff,0x0000000000000000 false
+function 025 0 true
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 027 0x0000000000000100,0x0000000000000100,0x0000000000000100,0x0000000000000000 false
+function 028 0x0000000000000001,0x0000000000000002,0x0000000000000003,0x0000000000000000 false
+
+Sample Run Output (Test 5):
+---------------------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 00000000000a5da8
+func1: 21 with 679336 rc: 0000000000000065
+func1: 22 with 101 rc: 00000000000a5db8
+func1: 21 with 679352 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc8
+(resetting function data)
+func: 25 rc: 0000000000000051
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 00000000000a5da8
+func1: 28 with 100 rc: 0000000000000001
+func1: 21 with 679336 rc: 0000000000000065
+func1: 22 with 101 rc: 00000000000a5db8
+func1: 28 with 101 rc: 0000000000000002
+func1: 21 with 679352 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc8
+func1: 28 with 102 rc: 0000000000000003
+func1: 21 with 679368 rc: 0000000000000000
+func1: 22 with 0 rc: 0000000000000000
+(finished)
+
+Test 6 (Check no function data)
+-------------------------------
+
+Sample Function Data (Test 6)
+-----------------------------
+
+Sample Run Output (Test 6):
+---------------------------
+
+func: 20 rc: 0000000000000000
+func1: 21 with 0 rc: 0000000000000000
+func1: 22 with 0 rc: 0000000000000000
+(finished)
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

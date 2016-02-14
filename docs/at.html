@@ -1,0 +1,302 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Automated Transactions Specification</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Automated Transactions Specification</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Automated Transactions Specification
+------------------------------------
+
+In brief an Automated Transaction is a "Turing complete" set of byte code instructions which will be executed
+by a byte code interpreter built into its host. An AT supporting host platform automatically supports various
+applications ranging from games of chance to automated crowdfunding and ensuring that "long term savings" are
+not lost forever.
+
+User Requirements
+-----------------
+
+The host will require changes to support the execution of Automated Transactions. These changes required need
+to include a way for a user to publish an AT as well as a way of being able to execute up to a max. number of
+steps for a given AT. After step execution is complete all relevant state for the AT is required to be stored
+in a newly created block (a *hash* of the state could be used provided that AT execution is mandatory).
+
+An AT needs to have an "account" (perhaps determined via a hash of its code) so that normal host users have a
+simple way to "send it funds". It also needs to be able to send funds to others (where the transactions could
+need to be recorded explictly for nodes that do not support running AT to be permitted).
+
+An AT engine needs to be built into the host that supports basic validation of AT the instructions and allows
+the execution of the AT to be controlled one step at a time.
+
+Use Case #1: Lottery
+
+Create a "lottery" program which will pay out its balance to a "winner" automatically once per week.
+
+To purchase a "ticket" a host user would send X to the "lottery AT account" (where some of this amount may be
+needed to pay for running the AT). The "ticket" itself would be need to be determinstic yet "random" (such as
+a future block hash) and may have to be determined "well after the block that its purchase occurs in".
+
+Use Case #2: Dormant Funds Transfer
+
+Create a program that if not notified before a certain period of time will transfer its funds to one specific
+account. The notification mechanism will be via an AM transaction and the content of the AM (if not empty) is
+a new address to payout to (note that AMs may not be supported in all hosts).
+
+Use Case #3: Project Crowdfunding Agent
+
+Create a program that will at a certain time check if it has a balance greater than or equal to a target that
+was hard-coded into it. If the required balance level has been reached then all funds will be then sent to an
+account hard-coded into it. If the required balance has not been met then each tx sender will be refunded the
+amount they sent (tx fees may also need to be considered).
+
+Functional Requirements
+-----------------------
+
+Code in an AT will be run by an AT byte code interpreter which will use a fixed amount of memory per program.
+ATs that require more than a "minimal" amount of memory will have a value deduced from their balance *before*
+they are executed (if the balance is too small to result in any execution then execution would not occur with
+no memory allocation actually being performed). It needs to be clearly understood that an AT can be halted at
+any step so there can be no "working memory" or the like in the AT interpreter itself.
+
+Both AT code and data need to be persistent (although data doesn't need to be stored until the AT has had one
+or more steps executed). Blockchain pruning could not include ATs that have a non-zero account balance. There
+should probably also be the ability to set a block number for execution so any unnecessary code execution can
+be avoided (perhaps this could be stored as part of the account information for the AT). It should also be an
+option to include initial values for (a portion of) the data area after the code.
+
+An AT will need to be created via its own special type of transaction which will need to include a fee amount
+large enough to cover the "costs" that the size of its code and data will dictate. Execution of AT code would
+be expected to be dependent upon the account balance of the AT and this balance would be reduced by each step
+executed (with some or all function call steps perhaps incurring more costs than non-function call steps).
+
+It can be expected that over time an increasing number of ATs will be created so the cost for running AT code
+must be kept to an absolute minimum. This will require AT code to be deterministic, and that its instructions
+must not be able to take arbitrary amounts of time. This will limit the set of API functions accessible to an
+AT to only those that do not require arbitrary scans over the blockchain (i.e. they should be only applicable
+to indexed information).
+
+An AT will be able to execute transactions (via the AT API) which can include different types of transactions
+such as those for using AM (where this is applicable according to the host platform).
+
+In order to satisfy the Lottery use case the following API functions need to be available to the AT engine:
+
+Get_Last_Time_Stamp (will return the "time stamp" of the previous block)
+Get_Tx_After (given a "time stamp" return the first tx id sent to the AT after it)
+Get_Tx_Type (for a given tx id return the type and subtype of the tx)
+Get_Tx_Amount (for a given tx id return the amount of host funds)
+Get_Tx_Time_Stamp (for a given tx id return its "time stamp")
+Get_Tx_Ticket_Num (for a given tx id return a "ticket value" *)
+Get_Tx_Source_Account (given a tx id this returns the account id of the funds sender)
+Get_Old_Balance (get the account balance of the AT after it had been last executed)
+Send_Old_To_Account (for a given account will send the AT's old balance)
+Send_Funds_to_Account (for a given account will send the given amount if the balance is enough to do so)
+
+* note that this function won't return until enough confirmations have allowed it to become available (so
+the AT will effectively sleep until it is ready to continue execution)
+
+Time stamp values need to also include the transaction # (zero when requesting a block time stamp) so that it
+is as simple as possible to do looping with API commands such as Get_Tx_After (and instead are really a block
+number and transaction number concatenated).
+
+Further API functions that will be required for the Dormant Funds Transfer are as follows:
+
+Get_Creator (will return the account/address of the AT's creator)
+Get_Balance (get the current account balance of the AT)
+Get_AM_Val (for a given tx id return the requested 64 bit "chunk" of AM data)
+Send_All_To_Account (for a given account will send the AT's remaining balance)
+
+Some other suggested API functions not covered by the above use cases are as follows:
+
+Send_AM (will cause the script to send an AM tx to a given account/address)
+
+Note that the "Automated Transactions API Specification" document will provide a formal description for every
+function that an AT can be guaranteed to use.
+
+Technical Specifications
+------------------------
+
+An AT creation tx would include header information along with the byte code and would optioinally include the
+amount of host funds to transfer to become the AT's initial account balance (allowing execution to start from
+the same block as the creation tx occurs).
+
+[Header]
+0x0001 ; AT version (16 bits)
+0x0000 ; (reserved) (16 bits)
+0x0001 ; code pages (16 bits) (number of 256 byte pages required)
+0x0001 ; data pages (16 bits) (number of 256 byte pages required)
+0x0000 ; call stack (16 bits) (number of 256 byte pages required)
+0x0000 ; user stack (16 bits) (number of 256 byte pages required)
+
+[Code - to be length prefixed]
+0100000000b8220000000000003301000000000028
+
+[Initial Data - also to be length prefixed]
+010000000000000002000000000000000300000000000000
+
+Although theoretically an AT could be 32MB in size an AT will have to be restricted to a much smaller maximum
+amount and all data bytes will need to be zeroed prior to initial execution. Note the version number would be
+incremented with each release that either extends the AT interpreter or adds newer AT APIs.
+
+State storage would need to include all data but also all other state that is necessary to "continue" running
+an AT after any step it had previously stopped at.
+
+[State]
+0x00000000 ; flags (32 bits)
+0x00000000 ; pc (32 bits) program counter
+0x00000000 ; cs (32 bits) call stack counter
+0x00000000 ; us (32 bits) user stack counter
+0x00000000 ; pce (32 bits) program counter error handler point
+0x00000000 ; pcs (32 bits) program counter next starting point
+0x00000000 ; sleep_until (32 bits) execution to wait until &gt;= this block
+0x0000000000000000 ; stopped at balance (64 bits)*
+0x0000000000000000000000000000000000000000000000000000000000000000 ; pseudo register A (256 bits)
+0x0000000000000000000000000000000000000000000000000000000000000000 ; pseudo register B (256 bits)
+
+* if AT stops set to current balance and execution will not continue until balance is greater (then clear it)
+
+In order to conserve space it would be recommended to use two flags to indicate a zero value for the A and B
+register (saving either 32 or 64 bytes).
+
+[Data]
+0100000000000000020000000000000003000000000000001111111111111111
+
+The "flags" would include indicate whether the program has paused (so excution will be continued after the op
+that had been last executed), stopped (so execution would continue from the beginning with all the data being
+kept intact) or terminated (some ideas about how to handle "termination" will need to be examined and perhaps
+the "reserved" part of the code header might need to be used to set some flags for this purpose).
+
+Data addresses are a signed 32 bit value (negative values being invalid) that are used for accessing strictly
+aligned 64 bit data value. If you consider a typical raw byte dump as follows:
+
+00000000  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+          -----------------------
+          0x00000000 (address)    ------------------------
+                                  0x00000001 (address)
+
+then each line of 16 bytes would be data for two address (i.e. 0x00000000 and 0x00000001). Addresses for code
+are also 32 bit. An op code is a single byte and AT API function numbers are 16 bits. For "branch" commands a
+single signed byte offset is used (so can jump to another op code up to +-127 bytes from the current pc). The
+"value" type for being able to set a constant value is a signed 64 bit integer.
+
+The following table summarises the types:
+
+opcode   (int8_t)   0x00
+offset   (int8_t)   0x00
+func #   (int16_t)  0x0000
+address  (int32_t)  0x00000000
+value    (int64_t)  0x0000000000000000
+
+For AT creation and state updates all values broadcast or hashed must be "little endian". The actual physical
+storage is of course up to each platform.
+
+The following are suggested op codes (the hex values are what has been used in the "at.cpp" prototype).
+
+Op Code           Hex    Additional             Operation (and comments)
+-------           ----   -----------            -------------------------------------------------------------
+NOP               0x7f                          (can be used for padding if required)
+SET_VAL           0x01   addr,value             @addr = value
+SET_DAT           0x02   addr1,addr2            @addr1 = $addr2
+CLR_DAT           0x03   addr                   @addr = 0 (to save space rather than using SET_VAL with 0)
+INC_DAT           0x04   addr                   @addr += 1
+DEC_DAT           0x05   addr                   @addr -= 1
+ADD_DAT           0x06   addr1,addr2            @addr1 += $addr2
+SUB_DAT           0x07   addr1,addr2            @addr1 -= $addr2
+MUL_DAT           0x08   addr1,addr2            @addr1 *= $addr2
+DIV_DAT           0x09   addr1,addr2            @addr1 /= $addr2
+BOR_DAT           0x0a   addr1,addr2            @addr1 |= $addr2
+AND_DAT           0x0b   addr1,addr2            @addr1 &= $addr2
+XOR_DAT           0x0c   addr1,addr2            @addr1 ^= $addr2
+NOT_DAT           0x0d   addr                   @addr = ~$addr (bitwise not)
+SET_IND           0x0e   addr1,addr2            @addr1 = $($addr2) (fetch indirect)
+SET_IDX           0x0f   addr1,addr2,addr3      @addr1 = $($addr2 + $addr3) (fetch indirect indexed)
+PSH_DAT           0x10   addr                   @--ustack_top = $addr
+POP_DAT           0x11   addr                   $addr = @ustack_top++
+JMP_SUB           0x12   addr                   @--cstack_top = pc + 5, pc = addr
+RET_SUB           0x13                          pc = @cstack_top++
+IND_DAT           0x14   addr1,addr2            @($addr1) = $addr2 (store indirect)
+IDX_DAT           0x15   addr1,addr2,addr3      @($addr1 + $addr2) = $addr3 (store indirect indexed)
+MOD_DAT           0x16   addr1,addr2            @addr1 %= $addr2
+SHL_DAT           0x17   addr1,addr2            @addr1 &lt;&lt;= $addr2
+SHR_DAT           0x18   addr1,addr2            @addr1 &gt;&gt;= $addr2
+JMP_ADR           0x1a   addr                   pc = addr
+BZR_DAT           0x1b   addr,offset            if $addr == 0 then pc += offset
+BNZ_DAT           0x1e   addr,offset            if $addr != 0 then pc += offset
+BGT_DAT           0x1f   addr1,addr2,offset     if $addr1 &gt; $addr2 then pc += offset
+BLT_DAT           0x20   addr1,addr2,offset     if $addr1 &lt; $addr2 then pc += offset
+BGE_DAT           0x21   addr1,addr2,offset     if $addr1 &gt;= $addr2 then pc += offset
+BLE_DAT           0x22   addr1,addr2,offset     if $addr1 &lt;= $addr2 then pc += offset
+BEQ_DAT           0x23   addr1,addr2,offset     if $addr1 == $addr2 then pc += offset
+BNE_DAT           0x24   addr1,addr2,offset     if $addr1 != $addr2 then pc += offset
+SLP_DAT           0x25   addr                   sleep until $addr timestamp*
+FIZ_DAT           0x26   addr                   if $addr == 0 then pc = pcs and stop
+STZ_DAT           0x27   addr                   if $addr == 0 then stop
+FIN_IMD           0x28                          pc = pcs and stop
+STP_IMD           0x29                          stop
+SLP_IMD           0x2a                          sleep until the next block
+ERR_ADR           0x2b   addr                   pce = addr
+SET_PCS           0x30                          pcs = pc + 1
+EXT_FUN           0x32   func                   func( )
+EXT_FUN_DAT       0x33   func,addr              func( $addr )
+EXT_FUN_DAT_2     0x34   func,addr1,addr2       func( $addr1, $addr2 )
+EXT_FUN_RET       0x35   func,addr              @addr = func( )
+EXT_FUN_RET_DAT   0x36   func,addr1,addr2       @addr1 = func( $addr2 )
+EXT_FUN_RET_DAT_2 0x37   func,addr1,addr2,addr3 @addr1 = func( $addr2, $addr3 )
+
+* where timestamp is actually a 32 bit block height stored in the high order 32 bits of the address value and
+if the block height is not greater than the current block height then it will instead just operate as SLP_IMD
+
+All instructions that modify the pc will need to ensure the value it is being set to is a valid code address.
+
+Note that there is only a "code" and "data" segment. The "stacks" (if used) are actually included at the last
+part of the data segment. If using any stack operations (i.e. PSH_DAT/POP_DAT/JMP_SUB/RET_SUB) then sufficent
+data storage for both variables and the stacks would need to be allocated.
+
+The call stack preceeds the user stack (with both growing backwards). The following picture illustrates this:
+
+ --------------
+| data         |
+|              |
+|              |
+|              |
+|              |
+ --------------
+|              |
+|              |
+| call stack   |
+ --------------
+|              |
+|              |
+| user stack   |
+ --------------
+
+For the purpose of being able to create an AT and to store its state after executing steps there will need to
+specially created host transactions.
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

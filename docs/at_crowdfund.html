@@ -1,0 +1,187 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Use Case: Crowdfunding Agent</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Use Case: Crowdfunding Agent</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Use Case: Crowdfunding Agent
+----------------------------
+
+If a target balance is achieved by a hard-coded time then the entire balance will be sent to an account which
+is also hard-coded into the AT. If not then the txs that were sent to it will be iterated and refunded to one
+by one.
+
+Note that there are exactly 9 steps required to be executed "per refund" so in order for this AT to correctly
+refund every tx a fee that allows for those steps would either need to be charged for sending funds to the AT
+or otherwise the amount needed to cover those steps would need to be deducted from the refund.
+
+Variables
+---------
+
+@00 ==&gt; @timestamp
+@01 ==&gt; @decision_time
+@02 ==&gt; @txid
+@03 ==&gt; (unused)
+@04 ==&gt; @tx_info
+@05 ==&gt; @target_amt
+@06 ==&gt; @target_acc
+@07 ==&gt; @balance
+@08 ==&gt; @tx_source
+@09 ==&gt; @refund_time
+
+Functions
+---------
+
+20 (0x14) = get a time stamp value for the last block in the blockchain
+21 (0x15) = get txid for the first tx after the provided time stamp
+22 (0x16) = get a time stamp value for a given txid
+24 (0x18) = get source account/address for a given txid
+25 (0x19) = get balance of own account
+27 (0x1b) = get funds amount for a given txid
+31 (0x1f) = pay given funds amount to a given account/address
+
+Sample Function Data
+--------------------
+
+function 020 0x0000000000012345 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x00000000000a5da8,0x00000000000a5db8,0x00000000000a5dc8,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x000000000000ffff,0x0000000000000000 false
+function 025 0 true
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 027 0x0000000000000100,0x0000000000000100,0x0000000000000100,0x0000000000000000 false
+
+Sample Run Output
+-----------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 00000000000a5da8
+func1: 21 with 679336 rc: 0000000000000065
+func1: 22 with 101 rc: 00000000000a5db8
+func1: 21 with 679352 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc8
+(resetting function data)
+func: 25 rc: 0000000000000051
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 00000000000a5da8
+func1: 28 with 100 rc: 0000000000000000
+func1: 24 with 100 rc: 1111000000000000
+func1: 27 with 100 rc: 0000000000000100
+payout 70 to account: 1111000000000000
+(stopped - zero balance)
+
+Script Assembly
+---------------
+
+if @timestamp not zero goto loop                         1e0000000034
+get last block timestamp and put in @timestamp           35140000000000
+copy @timestamp to @refund_time                          020900000000000000
+set @decision_time                                       0101000000c55d0a0000000000
+set @target_amt (to 100)                                 01050000006400000000000000
+set @target_acc                                          01060000001111111100000000
+
+:loop (0000003d)
+get tx at after @timestamp and store in @txid            3615000200000000000000
+get timestamp for @txid and store in @timestamp          3616000000000002000000
+if @timestamp &gt; @decision_time goto decision             1f000000000100000014
+if @txid is zero finish                                  2602000000
+goto loop                                                1a3d000000
+
+:decision (00000067)
+get balance and store in @balance                        35190007000000
+restore @timestamp from @refund_time                     020000000009000000
+if @target_amt &gt; @balance goto refund                    1f050000000700000013
+
+:funded
+set pcs                                                  30
+pay balance to @target_account                           331a0006000000
+finish                                                   28
+
+:refund (0000008a)
+set pcs                                                  30
+
+:refund loop
+get tx at after @timestamp and store in @txid            3615000200000000000000
+get timestamp for @txid and store in @timestamp          3616000000000002000000
+if @txid is zero finish                                  2602000000
+
+get tx type for @txid and store in @tx_info              361c000400000002000000
+if @tx_info is non-zero goto skip                        1e0400000027
+
+get account for @txid and put in @tx_source              3618000800000002000000
+get amount for @txid and store in @tx_info               361b000400000002000000
+send @tx_info to @tx_source                              341f000400000008000000
+
+:skip
+goto refund loop                                         1a8a000000
+
+Assembly Code
+-------------
+
+00000000* BNZ $00000000 :0000003d
+00000006  FUN @00000000 20
+0000000d  SET @00000009 $00000000
+00000016  SET @00000001 #0000001100000000
+00000023  SET @00000005 #00000002dd231b00
+00000030  SET @00000006 #15aefb06dcb7450e
+0000003d  FUN @00000002 21 $00000000
+00000048  FUN @00000000 22 $00000002
+00000053  BGT $00000000 $00000001 :00000067
+0000005d  FIZ @00000002
+00000062  JMP :0000003d
+00000067  FUN @00000007 25
+0000006e  SET @00000000 $00000009
+00000077  BGT $00000005 $00000007 :0000008a
+00000081  PCS
+00000082  FUN 26 $00000006
+00000089  FIN
+0000008a  PCS
+0000008b  FUN @00000002 21 $00000000
+00000096  FUN @00000000 22 $00000002
+000000a1  FIZ @00000002
+000000a6  FUN @00000004 28 $00000002
+000000b1  BNZ $00000004 :000000d8
+000000b7  FUN @00000008 24 $00000002
+000000c2  FUN @00000004 27 $00000002
+000000cd  FUN 31 $00000004 $00000008
+000000d8  JMP :0000008a
+
+Machine Code
+------------
+
+1e000000003d351400000000000209000000000000000101000000c55d0a00000000000105000000640000000000000001060000
+001111111100000000361500020000000000000036160000000000020000001f00000000010000001426020000001a3d00000035
+1900070000000200000000090000001f05000000070000001330331a000600000028303615000200000000000000361600000000
+00020000002602000000361c0004000000020000001e04000000273618000800000002000000361b000400000002000000341f00
+04000000080000001a8a000000
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

@@ -1,0 +1,2649 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - at.cpp </title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">at.cpp </h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+at.cpp 
+// Copyright (c) 2014 CIYAM Developers
+//
+// Distributed under the MIT/X11 software license, please refer to the file license.txt
+// in the root project directory or http://www.opensource.org/licenses/mit-license.php.
+#include &lt;cstdlib&gt;
+#include &lt;memory.h&gt;
+
+#ifndef _WIN32
+#  include &lt;stdint.h&gt;
+#else
+#  ifdef _MSC_VER
+typedef __int8 int8_t;
+typedef __int16 int16_t;
+typedef __int32 int32_t;
+typedef __int64 int64_t;
+#  endif
+#endif
+
+#include &lt;map&gt;
+#include &lt;set&gt;
+#include &lt;deque&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+#include &lt;fstream&gt;
+#include &lt;iomanip&gt;
+#include &lt;sstream&gt;
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+
+/* Basic Test Cases
+(output value)
+&gt; code 0100000000b8220000000000003301000000000028
+&gt; run
+8888
+
+(testing loop)
+&gt; code 35020000000000330100000000001e00000000f228
+&gt; run
+1
+2
+3
+4
+5
+6
+7
+8
+9
+0
+
+(explicit loop)
+&gt; code 010000000003000000000000000500000000330100000000001e00000000f428
+&gt; run
+2
+1
+0
+*/
+
+using namespace std;
+
+const int32_t c_code_page_bytes = 512;
+const int32_t c_data_page_bytes = 512;
+
+const int32_t c_call_stack_page_bytes = 256;
+const int32_t c_user_stack_page_bytes = 256;
+
+int32_t g_code_pages = 1;
+int32_t g_data_pages = 1;
+
+int32_t g_call_stack_pages = 1;
+int32_t g_user_stack_pages = 1;
+
+const int64_t c_default_balance = 100;
+
+const int32_t c_max_to_multiply = 0x1fffffff;
+
+int64_t g_val = 0;
+int64_t g_val1 = 0;
+
+int64_t g_balance = c_default_balance;
+
+bool g_first_call = true;
+
+int32_t g_increment_func = 0;
+
+enum op_code
+{
+   e_op_code_NOP = 0x7f,
+   e_op_code_SET_VAL = 0x01,
+   e_op_code_SET_DAT = 0x02,
+   e_op_code_CLR_DAT = 0x03,
+   e_op_code_INC_DAT = 0x04,
+   e_op_code_DEC_DAT = 0x05,
+   e_op_code_ADD_DAT = 0x06,
+   e_op_code_SUB_DAT = 0x07,
+   e_op_code_MUL_DAT = 0x08,
+   e_op_code_DIV_DAT = 0x09,
+   e_op_code_BOR_DAT = 0x0a,
+   e_op_code_AND_DAT = 0x0b,
+   e_op_code_XOR_DAT = 0x0c,
+   e_op_code_NOT_DAT = 0x0d,
+   e_op_code_SET_IND = 0x0e,
+   e_op_code_SET_IDX = 0x0f,
+   e_op_code_PSH_DAT = 0x10,
+   e_op_code_POP_DAT = 0x11,
+   e_op_code_JMP_SUB = 0x12,
+   e_op_code_RET_SUB = 0x13,
+   e_op_code_IND_DAT = 0x14,
+   e_op_code_IDX_DAT = 0x15,
+   e_op_code_MOD_DAT = 0x16,
+   e_op_code_SHL_DAT = 0x17,
+   e_op_code_SHR_DAT = 0x18,
+   e_op_code_JMP_ADR = 0x1a,
+   e_op_code_BZR_DAT = 0x1b,
+   e_op_code_BNZ_DAT = 0x1e,
+   e_op_code_BGT_DAT = 0x1f,
+   e_op_code_BLT_DAT = 0x20,
+   e_op_code_BGE_DAT = 0x21,
+   e_op_code_BLE_DAT = 0x22,
+   e_op_code_BEQ_DAT = 0x23,
+   e_op_code_BNE_DAT = 0x24,
+   e_op_code_SLP_DAT = 0x25,
+   e_op_code_FIZ_DAT = 0x26,
+   e_op_code_STZ_DAT = 0x27,
+   e_op_code_FIN_IMD = 0x28,
+   e_op_code_STP_IMD = 0x29,
+   e_op_code_SLP_IMD = 0x2a,
+   e_op_code_ERR_ADR = 0x2b,
+   e_op_code_SET_PCS = 0x30,
+   e_op_code_EXT_FUN = 0x32,
+   e_op_code_EXT_FUN_DAT = 0x33,
+   e_op_code_EXT_FUN_DAT_2 = 0x34,
+   e_op_code_EXT_FUN_RET = 0x35,
+   e_op_code_EXT_FUN_RET_DAT = 0x36,
+   e_op_code_EXT_FUN_RET_DAT_2 = 0x37,
+};
+
+struct machine_state
+{
+   machine_state( )
+   {
+      pce = pcs = 0;
+      reset( );
+   }
+
+   void reset( )
+   {
+      pc = pcs;
+      opc = 0;
+
+      cs = 0;
+      us = 0;
+
+      steps = 0;
+
+      a1 = 0;
+      a2 = 0;
+      a3 = 0;
+      a4 = 0;
+
+      b1 = 0;
+      b2 = 0;
+      b3 = 0;
+      b4 = 0;
+
+      jumps.clear( );
+
+      stopped = false;
+      finished = false;
+   }
+
+   bool stopped; // transient
+   bool finished; // transient
+
+   int32_t pc;
+   int32_t pce;
+   int32_t pcs;
+
+   int32_t opc; // transient
+
+   int32_t cs;
+   int32_t us;
+
+   int64_t a1;
+   int64_t a2;
+   int64_t a3;
+   int64_t a4;
+
+   int64_t b1;
+   int64_t b2;
+   int64_t b3;
+   int64_t b4;
+
+   int32_t steps;
+
+   int32_t sleep_until;
+
+   set&lt; int32_t &gt; jumps; // transient
+};
+
+struct function_data
+{
+   function_data( )
+   {
+      loop = false;
+      offset = 0;
+   }
+
+   bool loop;
+   size_t offset;
+
+   vector&lt; int64_t &gt; data;
+};
+
+string decode_function_name( int16_t fun, int8_t op )
+{
+   ostringstream osstr;
+
+   int8_t op_expected = 0;
+
+   switch( fun )
+   {
+      case 0x0100:
+      osstr &lt;&lt; "Get_A1";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0101:
+      osstr &lt;&lt; "Get_A2";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0102:
+      osstr &lt;&lt; "Get_A3";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0103:
+      osstr &lt;&lt; "Get_A4";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0104:
+      osstr &lt;&lt; "Get_B1";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0105:
+      osstr &lt;&lt; "Get_B2";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0106:
+      osstr &lt;&lt; "Get_B3";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0107:
+      osstr &lt;&lt; "Get_B4";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0110:
+      osstr &lt;&lt; "Set_A1";
+      op_expected = e_op_code_EXT_FUN_DAT;
+      break;
+
+      case 0x0111:
+      osstr &lt;&lt; "Set_A2";
+      op_expected = e_op_code_EXT_FUN_DAT;
+      break;
+
+      case 0x0112:
+      osstr &lt;&lt; "Set_A3";
+      op_expected = e_op_code_EXT_FUN_DAT;
+      break;
+
+      case 0x0113:
+      osstr &lt;&lt; "Set_A4";
+      op_expected = e_op_code_EXT_FUN_DAT;
+      break;
+
+      case 0x0114:
+      osstr &lt;&lt; "Set_A1_A2";
+      op_expected = e_op_code_EXT_FUN_DAT_2;
+      break;
+
+      case 0x0115:
+      osstr &lt;&lt; "Set_A3_A4";
+      op_expected = e_op_code_EXT_FUN_DAT_2;
+      break;
+
+      case 0x0116:
+      osstr &lt;&lt; "Set_B1";
+      op_expected = e_op_code_EXT_FUN_DAT;
+      break;
+
+      case 0x0117:
+      osstr &lt;&lt; "Set_B2";
+      op_expected = e_op_code_EXT_FUN_DAT;
+      break;
+
+      case 0x0118:
+      osstr &lt;&lt; "Set_B3";
+      op_expected = e_op_code_EXT_FUN_DAT;
+      break;
+
+      case 0x0119:
+      osstr &lt;&lt; "Set_B4";
+      op_expected = e_op_code_EXT_FUN_DAT;
+      break;
+
+      case 0x011a:
+      osstr &lt;&lt; "Set_B1_B2";
+      op_expected = e_op_code_EXT_FUN_DAT_2;
+      break;
+
+      case 0x011b:
+      osstr &lt;&lt; "Set_B3_B4";
+      op_expected = e_op_code_EXT_FUN_DAT_2;
+      break;
+
+      case 0x0120:
+      osstr &lt;&lt; "Clear_A";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0121:
+      osstr &lt;&lt; "Clear_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0122:
+      osstr &lt;&lt; "Clear_A_And_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0123:
+      osstr &lt;&lt; "Copy_A_From_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0124:
+      osstr &lt;&lt; "Copy_B_From_A";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0125:
+      osstr &lt;&lt; "Check_A_Is_Zero";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0126:
+      osstr &lt;&lt; "Check_B_Is_Zero";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0127:
+      osstr &lt;&lt; "Check_A_Equals_B";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0128:
+      osstr &lt;&lt; "Swap_A_and_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0129:
+      osstr &lt;&lt; "OR_A_with_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x012a:
+      osstr &lt;&lt; "OR_B_with_A";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x012b:
+      osstr &lt;&lt; "AND_A_with_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x012c:
+      osstr &lt;&lt; "AND_B_with_A";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x012d:
+      osstr &lt;&lt; "XOR_A_with_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x012e:
+      osstr &lt;&lt; "XOR_B_with_A";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0200:
+      osstr &lt;&lt; "MD5_A_To_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0201:
+      osstr &lt;&lt; "Check_MD5_A_With_B";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0202:
+      osstr &lt;&lt; "HASH160_A_To_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0203:
+      osstr &lt;&lt; "Check_HASH160_A_With_B";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0204:
+      osstr &lt;&lt; "SHA256_A_To_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0205:
+      osstr &lt;&lt; "Check_SHA256_A_With_B";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0300:
+      osstr &lt;&lt; "Get_Block_Timestamp";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0301:
+      osstr &lt;&lt; "Get_Creation_Timestamp";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0302:
+      osstr &lt;&lt; "Get_Last_Block_Timestamp";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0303:
+      osstr &lt;&lt; "Put_Last_Block_Hash_In_A";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0304:
+      osstr &lt;&lt; "A_To_Tx_After_Timestamp";
+      op_expected = e_op_code_EXT_FUN_DAT;
+      break;
+
+      case 0x0305:
+      osstr &lt;&lt; "Get_Type_For_Tx_In_A";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0306:
+      osstr &lt;&lt; "Get_Amount_For_Tx_In_A";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0307:
+      osstr &lt;&lt; "Get_Timestamp_For_Tx_In_A";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0308:
+      osstr &lt;&lt; "Get_Random_Id_For_Tx_In_A";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0309:
+      osstr &lt;&lt; "Message_From_Tx_In_A_To_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x030a:
+      osstr &lt;&lt; "B_To_Address_Of_Tx_In_A";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x030b:
+      osstr &lt;&lt; "B_To_Address_Of_Creator";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0400:
+      osstr &lt;&lt; "Get_Current_Balance";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0401:
+      osstr &lt;&lt; "Get_Previous_Balance";
+      op_expected = e_op_code_EXT_FUN_RET;
+      break;
+
+      case 0x0402:
+      osstr &lt;&lt; "Send_To_Address_In_B";
+      op_expected = e_op_code_EXT_FUN_DAT;
+      break;
+
+      case 0x0403:
+      osstr &lt;&lt; "Send_All_To_Address_In_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0404:
+      osstr &lt;&lt; "Send_Old_To_Address_In_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0405:
+      osstr &lt;&lt; "Send_A_To_Address_In_B";
+      op_expected = e_op_code_EXT_FUN;
+      break;
+
+      case 0x0406:
+      osstr &lt;&lt; "Add_Minutes_To_Timestamp";
+      op_expected = e_op_code_EXT_FUN_RET_DAT_2;
+      break;
+
+      default:
+      osstr &lt;&lt; "0x" &lt;&lt; hex &lt;&lt; setw( 4 ) &lt;&lt; setfill( '0' ) &lt;&lt; fun;
+   }
+
+   if( op && op_expected && op != op_expected )
+      osstr &lt;&lt; " *** invalid op ***";
+
+   return osstr.str( );
+}
+
+map&lt; int32_t, function_data &gt; g_function_data;
+
+int64_t get_function_data( int32_t func_num )
+{
+   if( func_num == g_increment_func )
+   {
+      if( g_first_call )
+         g_first_call = false;
+      else
+      {
+         for( map&lt; int32_t, function_data &gt;::iterator i = g_function_data.begin( ); i != g_function_data.end( ); ++i )
+         {
+            if( ++( i-&gt;second.offset ) &gt;= i-&gt;second.data.size( ) )
+            {
+               if( i-&gt;second.loop )
+                  i-&gt;second.offset = 0;
+               else
+                  --( i-&gt;second.offset );
+            }
+         }
+      }
+   }
+
+   int64_t rc = g_function_data[ func_num ].data[ g_function_data[ func_num ].offset ];
+
+   return rc;
+}
+
+int64_t func( int32_t func_num, machine_state& state )
+{
+   int64_t rc = 0;
+
+   if( func_num == 1 )
+      rc = g_val;
+   else if( func_num == 2 ) // get a value
+   {
+      if( g_val == 9 )
+         rc = g_val = 0;
+      else
+         rc = ++g_val;
+   }
+   else if( func_num == 3 ) // get size
+      rc = 10;
+   else if( func_num == 4 ) // get func num
+      rc = func_num;
+   else if( func_num == 25 || func_num == 32 ) // get balance (prior)
+   {
+      rc = g_balance;
+      if( g_function_data.count( func_num ) )
+      {
+         cout &lt;&lt; "(resetting function data)\n";
+         g_first_call = true;
+         for( map&lt; int32_t, function_data &gt;::iterator i = g_function_data.begin( ); i != g_function_data.end( ); ++i )
+            i-&gt;second.offset = 0;
+      }
+   }
+   else if( func_num == 0x0100 ) // Get_A1
+      rc = state.a1;
+   else if( func_num == 0x0101 ) // Get_A2
+      rc = state.a2;
+   else if( func_num == 0x0102 ) // Get_A3
+      rc = state.a3;
+   else if( func_num == 0x0103 ) // Get_A4
+      rc = state.a4;
+   else if( func_num == 0x0104 ) // Get_B1
+      rc = state.b1;
+   else if( func_num == 0x0105 ) // Get_B2
+      rc = state.b2;
+   else if( func_num == 0x0106 ) // Get_B3
+      rc = state.b3;
+   else if( func_num == 0x0107 ) // Get_B4
+      rc = state.b4;
+   else if( func_num == 0x0120 ) // Clear_A
+   {
+      state.a1 = 0;
+      state.a2 = 0;
+      state.a3 = 0;
+      state.a4 = 0;
+   }
+   else if( func_num == 0x0121 ) // Clear_B
+   {
+      state.b1 = 0;
+      state.b2 = 0;
+      state.b3 = 0;
+      state.b4 = 0;
+   }
+   else if( func_num == 0x0122 ) // Clear_A_And_B
+   {
+      state.a1 = state.b1 = 0;
+      state.a2 = state.b2 = 0;
+      state.a3 = state.b3 = 0;
+      state.a4 = state.b4 = 0;
+   }
+   else if( func_num == 0x0123 ) // Copy_A_From_B
+   {
+      state.a1 = state.b1;
+      state.a2 = state.b2;
+      state.a3 = state.b3;
+      state.a4 = state.b4;
+   }
+   else if( func_num == 0x0124 ) // Copy_B_From_A
+   {
+      state.b1 = state.a1;
+      state.b2 = state.a2;
+      state.b3 = state.a3;
+      state.b4 = state.a4;
+   }
+   else if( func_num == 0x0125 ) // Check_A_Is_Zero
+   {
+      if( state.a1 == 0 && state.a2 == 0 && state.a3 == 0 && state.a4 == 0 )
+         rc = true;
+   }
+   else if( func_num == 0x0126 ) // Check_B_Is_Zero
+   {
+      if( state.b1 == 0 && state.b2 == 0 && state.b3 == 0 && state.b4 == 0 )
+         rc = true;
+   }
+   else if( func_num == 0x0127 ) // Check_A_Equals_B
+   {
+      if( state.a1 == state.b1 && state.a2 == state.b2 && state.a3 == state.b3 && state.a4 == state.b4 )
+         rc = true;
+   }
+   else if( func_num == 0x0128 ) // Swap_A_and_B
+   {
+      int64_t tmp_a1 = state.a1;
+      int64_t tmp_a2 = state.a2;
+      int64_t tmp_a3 = state.a3;
+      int64_t tmp_a4 = state.a4;
+
+      state.a1 = state.b1;
+      state.a2 = state.b2;
+      state.a3 = state.b3;
+      state.a4 = state.b4;
+
+      state.b1 = tmp_a1;
+      state.b2 = tmp_a2;
+      state.b3 = tmp_a3;
+      state.b4 = tmp_a4;
+   }
+   else if( func_num == 0x0129 ) // OR_A_with_B
+   {
+      state.a1 = state.a1 | state.b1;
+      state.a2 = state.a2 | state.b2;
+      state.a3 = state.a3 | state.b3;
+      state.a4 = state.a4 | state.b4;
+   }
+   else if( func_num == 0x012a ) // OR_B_with_A
+   {
+      state.b1 = state.a1 | state.b1;
+      state.b2 = state.a2 | state.b2;
+      state.b3 = state.a3 | state.b3;
+      state.b4 = state.a4 | state.b4;
+   }
+   else if( func_num == 0x012b ) // AND_A_with_B
+   {
+      state.a1 = state.a1 & state.b1;
+      state.a2 = state.a2 & state.b2;
+      state.a3 = state.a3 & state.b3;
+      state.a4 = state.a4 & state.b4;
+   }
+   else if( func_num == 0x012c ) // AND_B_with_A
+   {
+      state.b1 = state.a1 & state.b1;
+      state.b2 = state.a2 & state.b2;
+      state.b3 = state.a3 & state.b3;
+      state.b4 = state.a4 & state.b4;
+   }
+   else if( func_num == 0x012d ) // XOR_A_with_B
+   {
+      state.a1 = state.a1 ^ state.b1;
+      state.a2 = state.a2 ^ state.b2;
+      state.a3 = state.a3 ^ state.b3;
+      state.a4 = state.a4 ^ state.b4;
+   }
+   else if( func_num == 0x012e ) // XOR_B_with_A
+   {
+      state.b1 = state.a1 ^ state.b1;
+      state.b2 = state.a2 ^ state.b2;
+      state.b3 = state.a3 ^ state.b3;
+      state.b4 = state.a4 ^ state.b4;
+   }
+   else if( g_function_data.count( func_num ) )
+      rc = get_function_data( func_num );
+
+   if( func_num != 2 )
+   {
+      if( func_num &lt; 0x100 )
+         cout &lt;&lt; "func: " &lt;&lt; dec &lt;&lt; func_num &lt;&lt; " rc: " &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; rc &lt;&lt; '\n';
+      else
+         cout &lt;&lt; "func: " &lt;&lt; decode_function_name( func_num, 0 )
+          &lt;&lt; " rc: 0x" &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; rc &lt;&lt; '\n';
+   }
+
+   return rc;
+}
+
+int64_t func1( int32_t func_num, machine_state& state, int64_t value, int8_t* p_data = 0, int32_t dsize = 0 )
+{
+   int64_t rc = 0;
+
+   if( func_num == 1 ) // echo
+      cout &lt;&lt; dec &lt;&lt; value &lt;&lt; '\n';
+   else if( func_num == 2 )
+      rc = value * 2; // double it
+   else if( func_num == 3 )
+      rc = value / 2; // halve it
+   else if( func_num == 26 || func_num == 33 ) // pay balance (prior)
+   {
+      cout &lt;&lt; "payout " &lt;&lt; dec &lt;&lt; g_balance &lt;&lt; " to account: " &lt;&lt; value &lt;&lt; '\n';
+      g_balance = 0;
+   }
+   else if( func_num == 0x0110 ) // Set_A1
+      state.a1 = value;
+   else if( func_num == 0x0111 ) // Set_A2
+      state.a2 = value;
+   else if( func_num == 0x0112 ) // Set_A3
+      state.a3 = value;
+   else if( func_num == 0x0113 ) // Set_A4
+      state.a4 = value;
+   else if( func_num == 0x0116 ) // Set_B1
+      state.b1 = value;
+   else if( func_num == 0x0117 ) // Set_B2
+      state.b2 = value;
+   else if( func_num == 0x0118 ) // Set_B3
+      state.b3 = value;
+   else if( func_num == 0x0119 ) // Set_B4
+      state.b4 = value;
+   else if( g_function_data.count( func_num ) )
+      rc = get_function_data( func_num );
+
+   if( func_num != 1 && func_num != 26 )
+   {
+      if( func_num &lt; 0x100 )
+         cout &lt;&lt; "func1: " &lt;&lt; dec &lt;&lt; func_num &lt;&lt; " with " &lt;&lt; value
+          &lt;&lt; " rc: " &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; rc &lt;&lt; '\n';
+      else
+         cout &lt;&lt; "func1: " &lt;&lt; decode_function_name( func_num, 0 )
+          &lt;&lt; " with " &lt;&lt; value &lt;&lt; " rc: 0x" &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; rc &lt;&lt; '\n';
+   }
+
+   return rc;
+}
+
+int64_t func2( int32_t func_num, machine_state& state, int64_t value1, int64_t value2, int8_t* p_data = 0, int32_t dsize = 0 )
+{
+   int64_t rc = 0;
+
+   if( func_num == 2 )
+      rc = value1 * value2; // multiply values
+   else if( func_num == 3 )
+      rc = value1 / value2; // divide values
+   else if( func_num == 4 )
+      rc = value1 + value2; // sum values
+   else if( func_num == 31 ) // send amount to address
+   {
+      if( value1 &gt; g_balance )
+         value1 = g_balance;
+
+      cout &lt;&lt; "payout " &lt;&lt; dec &lt;&lt; value1 &lt;&lt; " to account: " &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; value2 &lt;&lt; '\n';
+      g_balance -= value1;
+   }
+   else if( func_num == 0x0114 ) // Set_A1_A2
+   {
+      state.a1 = value1;
+      state.a2 = value2;
+   }
+   else if( func_num == 0x0115 ) // Set_A3_A4
+   {
+      state.a3 = value1;
+      state.a4 = value2;
+   }
+   else if( func_num == 0x011a ) // Set_B1_B2
+   {
+      state.b1 = value1;
+      state.b2 = value2;
+   }
+   else if( func_num == 0x011b ) // Set_B3_B4
+   {
+      state.b3 = value1;
+      state.b4 = value2;
+   }
+   else if( g_function_data.count( func_num ) )
+      rc = get_function_data( func_num );
+
+   if( func_num != 31 )
+   {
+      if( func_num &lt; 0x100 )
+         cout &lt;&lt; "func2: " &lt;&lt; dec &lt;&lt; func_num &lt;&lt; " with " &lt;&lt; value1
+          &lt;&lt; " and " &lt;&lt; value2 &lt;&lt; " rc: " &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; rc &lt;&lt; '\n';
+      else
+         cout &lt;&lt; "func2: " &lt;&lt; decode_function_name( func_num, 0 ) &lt;&lt; " with " &lt;&lt; value1
+          &lt;&lt; " and " &lt;&lt; value2 &lt;&lt; " rc: 0x" &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; rc &lt;&lt; '\n';
+   }
+
+   return rc;
+}
+
+int get_fun( int8_t* p_code, int32_t csize, const machine_state& state, int16_t& fun )
+{
+   if( state.pc + ( int32_t )sizeof( int16_t ) &gt;= csize )
+      return -1;
+   else
+   {
+      fun = *( int16_t* )( p_code + state.pc + 1 );
+
+      return 0;
+   }
+}
+
+int get_addr( int8_t* p_code,
+ int32_t csize, int32_t dsize, const machine_state& state, int32_t& addr, bool is_code = false )
+{
+   if( state.pc + ( int32_t )sizeof( int32_t ) &gt;= csize )
+      return -1;
+   else
+   {
+      addr = *( int32_t* )( p_code + state.pc + 1 );
+
+      if( addr &lt; 0 || addr &gt; c_max_to_multiply || ( is_code && addr &gt;= csize ) )
+         return -1;
+      else if( !is_code && ( ( addr * 8 ) &lt; 0 || ( addr * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize ) )
+         return -1;
+      else
+         return 0;
+   }
+}
+
+int get_addrs( int8_t* p_code,
+ int32_t csize, int32_t dsize, const machine_state& state, int32_t& addr1, int32_t& addr2 )
+{
+   if( state.pc + ( int32_t )sizeof( int32_t ) + ( int32_t )sizeof( int32_t ) &gt;= csize )
+      return -1;
+   else
+   {
+      addr1 = *( int32_t* )( p_code + state.pc + 1 );
+      addr2 = *( int32_t* )( p_code + state.pc + 1 + sizeof( int32_t ) );
+
+      if( addr1 &lt; 0 || addr1 &gt; c_max_to_multiply
+       || addr2 &lt; 0 || addr2 &gt; c_max_to_multiply
+       || ( addr1 * 8 ) &lt; 0 || ( addr2 * 8 ) &lt; 0
+       || ( addr1 * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize
+       || ( addr2 * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize )
+         return -1;
+      else
+         return 0;
+   }
+}
+
+int get_addr_off( int8_t* p_code,
+ int32_t csize, int32_t dsize, const machine_state& state, int32_t& addr, int8_t& off )
+{
+   if( state.pc + ( int32_t )sizeof( int32_t ) + ( int32_t )sizeof( int8_t ) &gt;= csize )
+      return -1;
+   else
+   {
+      addr = *( int32_t* )( p_code + state.pc + 1 );
+      off = *( int8_t* )( p_code + state.pc + 1 + sizeof( int32_t ) );
+
+      if( addr &lt; 0 || addr &gt; c_max_to_multiply || ( addr * 8 ) &lt; 0
+       || ( addr * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize || state.pc + off &gt;= csize )
+         return -1;
+      else
+         return 0;
+   }
+}
+
+int get_addrs_off( int8_t* p_code,
+ int32_t csize, int32_t dsize, const machine_state& state, int32_t& addr1, int32_t& addr2, int8_t& off )
+{
+   if( state.pc + ( int32_t )sizeof( int32_t ) + ( int32_t )sizeof( int32_t ) + ( int32_t )sizeof( int8_t ) &gt;= csize )
+      return -1;
+   else
+   {
+      addr1 = *( int32_t* )( p_code + state.pc + 1 );
+      addr2 = *( int32_t* )( p_code + state.pc + 1 + sizeof( int32_t ) );
+      off = *( int8_t* )( p_code + state.pc + 1 + sizeof( int32_t ) + sizeof( int32_t ) );
+
+      if( addr1 &lt; 0 || addr1 &lt; c_max_to_multiply
+       || addr2 &lt; 0 || addr2 &lt; c_max_to_multiply
+       || ( addr1 * 8 ) &lt; 0 || ( addr2 * 8 ) &lt; 0
+       || ( addr1 * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize
+       || ( addr2 * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize || state.pc + off &gt;= csize )
+         return -1;
+      else
+         return 0;
+   }
+}
+
+int get_fun_addr( int8_t* p_code,
+ int32_t csize, int32_t dsize, const machine_state& state, int16_t& fun, int32_t& addr )
+{
+   if( state.pc + ( int32_t )sizeof( int16_t ) + ( int32_t )sizeof( int32_t ) &gt;= csize )
+      return -1;
+   else
+   {
+      fun = *( int16_t* )( p_code + state.pc + 1 );
+      addr = *( int32_t* )( p_code + state.pc + 1 + sizeof( int16_t ) );
+
+      if( addr &lt; 0 || addr &gt; c_max_to_multiply
+       || ( addr * 8 ) &lt; 0 || ( addr * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize )
+         return -1;
+      else
+         return 0;
+   }
+}
+
+int get_fun_addrs( int8_t* p_code,
+ int32_t csize, int32_t dsize, const machine_state& state, int16_t& fun, int32_t& addr1, int32_t& addr2 )
+{
+   if( state.pc + ( int32_t )sizeof( int16_t )
+    + ( int32_t )sizeof( int32_t ) + ( int32_t )sizeof( int32_t ) &gt;= csize )
+      return -1;
+   else
+   {
+      fun = *( int16_t* )( p_code + state.pc + 1 );
+      addr1 = *( int32_t* )( p_code + state.pc + 1 + sizeof( int16_t ) );
+      addr2 = *( int32_t* )( p_code + state.pc + 1 + sizeof( int16_t ) + sizeof( int32_t ) );
+
+      if( addr1 &lt; 0 || addr1 &gt; c_max_to_multiply
+       || addr2 &lt; 0 || addr2 &gt; c_max_to_multiply
+       || ( addr1 * 8 ) &lt; 0 || ( addr2 * 8 ) &lt; 0
+       || ( addr1 * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize
+       || ( addr2 * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize )
+         return -1;
+      else
+         return 0;
+   }
+}
+
+int get_addr_val( int8_t* p_code,
+ int32_t csize, int32_t dsize, const machine_state& state, int32_t& addr, int64_t& val )
+{
+   if( state.pc + ( int32_t )sizeof( int32_t ) + ( int32_t )sizeof( int64_t ) &gt;= csize )
+      return -1;
+   else
+   {
+      addr = *( int32_t* )( p_code + state.pc + 1 );
+      val = *( int64_t* )( p_code + state.pc + 1 + ( int32_t )sizeof( int32_t ) );
+
+      if( addr &lt; 0 || addr &gt; c_max_to_multiply
+       || ( addr * 8 ) &lt; 0 || ( addr * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize )
+         return -1;
+      else
+         return 0;
+   }
+}
+
+int process_op( int8_t* p_code, int32_t csize, int8_t* p_data, int32_t dsize,
+ int32_t cssize, int32_t ussize, bool disassemble, bool determine_jumps, machine_state& state )
+{
+   int rc = 0;
+
+   bool invalid = false;
+   bool had_overflow = false;
+
+   if( csize &lt; 1 || state.pc &gt;= csize )
+      return 0;
+
+   if( determine_jumps )
+      state.jumps.insert( state.pc );
+
+   int8_t op = p_code[ state.pc ];
+
+   if( op && disassemble && !determine_jumps )
+   {
+      cout &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.pc;
+      if( state.pc == state.opc )
+         cout &lt;&lt; "* ";
+      else
+         cout &lt;&lt; "  ";
+   }
+
+   if( op == e_op_code_NOP )
+   {
+      if( disassemble )
+      {
+         if( !determine_jumps )
+            cout &lt;&lt; "NOP\n";
+         while( true )
+         {
+            ++rc;
+            if( state.pc + rc &gt;= csize || p_code[ state.pc + rc ] != e_op_code_NOP )
+               break;
+         }
+      }
+      else while( true )
+      {
+         ++rc;
+         ++state.pc;
+         if( state.pc &gt;= csize || p_code[ state.pc ] != e_op_code_NOP )
+            break;
+      }
+   }
+   else if( op == e_op_code_SET_VAL )
+   {
+      int32_t addr;
+      int64_t val;
+      rc = get_addr_val( p_code, csize, dsize, state, addr, val );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t ) + sizeof( int64_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+               cout &lt;&lt; "SET @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr &lt;&lt; " #" &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; val &lt;&lt; '\n';
+         }
+         else
+         {
+            state.pc += rc;
+            *( int64_t* )( p_data + ( addr * 8 ) ) = val;
+         }
+      }
+   }
+   else if( op == e_op_code_SET_DAT )
+   {
+      int32_t addr1, addr2;
+      rc = get_addrs( p_code, csize, dsize, state, addr1, addr2 );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t ) + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+               cout &lt;&lt; "SET @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr1 &lt;&lt; " $" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2 &lt;&lt; '\n';
+         }
+         else
+         {
+            state.pc += rc;
+            *( int64_t* )( p_data + ( addr1 * 8 ) ) = *( int64_t* )( p_data + ( addr2 * 8 ) );
+         }
+      }
+   }
+   else if( op == e_op_code_CLR_DAT )
+   {
+      int32_t addr;
+      rc = get_addr( p_code, csize, dsize, state, addr );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+               cout &lt;&lt; "CLR @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr &lt;&lt; '\n';
+         }
+         else
+         {
+            state.pc += rc;
+            *( int64_t* )( p_data + ( addr * 8 ) ) = 0;
+         }
+      }
+   }
+   else if( op == e_op_code_INC_DAT || op == e_op_code_DEC_DAT || op == e_op_code_NOT_DAT )
+   {
+      int32_t addr;
+      rc = get_addr( p_code, csize, dsize, state, addr );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               if( op == e_op_code_INC_DAT )
+                  cout &lt;&lt; "INC @";
+               else if( op == e_op_code_DEC_DAT )
+                  cout &lt;&lt; "DEC @";
+               else
+                  cout &lt;&lt; "NOT @";
+
+               cout &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr &lt;&lt; '\n';
+            }
+         }
+         else
+         {
+            state.pc += rc;
+
+            if( op == e_op_code_INC_DAT )
+               ++*( int64_t* )( p_data + ( addr * 8 ) );
+            else if( op == e_op_code_DEC_DAT )
+               --*( int64_t* )( p_data + ( addr * 8 ) );
+            else
+               *( int64_t* )( p_data + ( addr * 8 ) ) = ~*( int64_t* )( p_data + ( addr * 8 ) );
+         }
+      }
+   }
+   else if( op == e_op_code_ADD_DAT || op == e_op_code_SUB_DAT
+    || op == e_op_code_MUL_DAT || op == e_op_code_DIV_DAT )
+   {
+      int32_t addr1, addr2;
+      rc = get_addrs( p_code, csize, dsize, state, addr1, addr2 );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t ) + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               if( op == e_op_code_ADD_DAT )
+                  cout &lt;&lt; "ADD @";
+               else if( op == e_op_code_SUB_DAT )
+                  cout &lt;&lt; "SUB @";
+               else if( op == e_op_code_MUL_DAT )
+                  cout &lt;&lt; "MUL @";
+               else
+                  cout &lt;&lt; "DIV @";
+
+               cout &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr1 &lt;&lt; " $" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2 &lt;&lt; '\n';
+            }
+         }
+         else
+         {
+            int64_t val = *( int64_t* )( p_data + ( addr2 * 8 ) );
+
+            if( op == e_op_code_DIV_DAT && val == 0 )
+               rc = -2;
+            else
+            {
+               state.pc += rc;
+
+               if( op == e_op_code_ADD_DAT )
+                  *( int64_t* )( p_data + ( addr1 * 8 ) ) += *( int64_t* )( p_data + ( addr2 * 8 ) );
+               else if( op == e_op_code_SUB_DAT )
+                  *( int64_t* )( p_data + ( addr1 * 8 ) ) -= *( int64_t* )( p_data + ( addr2 * 8 ) );
+               else if( op == e_op_code_MUL_DAT )
+                  *( int64_t* )( p_data + ( addr1 * 8 ) ) *= *( int64_t* )( p_data + ( addr2 * 8 ) );
+               else
+                  *( int64_t* )( p_data + ( addr1 * 8 ) ) /= *( int64_t* )( p_data + ( addr2 * 8 ) );
+            }
+         }
+      }
+   }
+   else if( op == e_op_code_BOR_DAT
+    || op == e_op_code_AND_DAT || op == e_op_code_XOR_DAT )
+   {
+      int32_t addr1, addr2;
+      rc = get_addrs( p_code, csize, dsize, state, addr1, addr2 );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t ) + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               if( op == e_op_code_BOR_DAT )
+                  cout &lt;&lt; "BOR @";
+               else if( op == e_op_code_AND_DAT )
+                  cout &lt;&lt; "AND @";
+               else
+                  cout &lt;&lt; "XOR @";
+
+               cout &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr1 &lt;&lt; " $" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2 &lt;&lt; '\n';
+            }
+         }
+         else
+         {
+            state.pc += rc;
+            int64_t val = *( int64_t* )( p_data + ( addr2 * 8 ) );
+
+            if( op == e_op_code_BOR_DAT )
+               *( int64_t* )( p_data + ( addr1 * 8 ) ) |= val;
+            else if( op == e_op_code_AND_DAT )
+               *( int64_t* )( p_data + ( addr1 * 8 ) ) &= val;
+            else
+               *( int64_t* )( p_data + ( addr1 * 8 ) ) ^= val;
+         }
+      }
+   }
+   else if( op == e_op_code_SET_IND )
+   {
+      int32_t addr1, addr2;
+      rc = get_addrs( p_code, csize, dsize, state, addr1, addr2 );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t ) + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+               cout &lt;&lt; "SET @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr1 &lt;&lt; " $($" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2 &lt;&lt; ")\n";
+         }
+         else
+         {
+            int64_t addr = *( int64_t* )( p_data + ( addr2 * 8 ) );
+
+            if( addr &lt; 0 || addr &gt; c_max_to_multiply
+             || ( addr * 8 ) &lt; 0 || ( addr * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize )
+               rc = -1;
+            else
+            {
+               state.pc += rc;
+              *( int64_t* )( p_data + ( addr1 * 8 ) ) = *( int64_t* )( p_data + ( addr * 8 ) );
+            }
+         }
+      }
+   }
+   else if( op == e_op_code_SET_IDX )
+   {
+      int32_t addr1, addr2;
+      rc = get_addrs( p_code, csize, dsize, state, addr1, addr2 );
+
+      int32_t size = sizeof( int32_t ) + sizeof( int32_t );
+
+      if( rc == 0 || disassemble )
+      {
+         int32_t addr3;
+         rc = get_addr( p_code + size, csize, dsize, state, addr3 );
+
+         if( rc == 0 || disassemble )
+         {
+            rc = 1 + size + sizeof( int32_t );
+
+            if( disassemble )
+            {
+               if( !determine_jumps )
+                  cout &lt;&lt; "SET @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                   &lt;&lt; addr1 &lt;&lt; " $($" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2
+                   &lt;&lt; "+$" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr3 &lt;&lt; ")\n";
+            }
+            else
+            {
+               int64_t base = *( int64_t* )( p_data + ( addr2 * 8 ) );
+               int64_t offs = *( int64_t* )( p_data + ( addr3 * 8 ) );
+
+               int64_t addr = base + offs;
+
+               if( addr &lt; 0 || addr &gt; c_max_to_multiply
+                || ( addr * 8 ) &lt; 0 || ( addr * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize )
+                  rc = -1;
+               else
+               {
+                  state.pc += rc;
+                 *( int64_t* )( p_data + ( addr1 * 8 ) ) = *( int64_t* )( p_data + ( addr * 8 ) );
+               }
+            }
+         }
+      }
+   }
+   else if( op == e_op_code_PSH_DAT || op == e_op_code_POP_DAT )
+   {
+      int32_t addr;
+      rc = get_addr( p_code, csize, dsize, state, addr );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               if( op == e_op_code_PSH_DAT )
+                  cout &lt;&lt; "PSH $";
+               else
+                  cout &lt;&lt; "POP @";
+
+               cout &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr &lt;&lt; '\n';
+            }
+         }
+         else if( ( op == e_op_code_PSH_DAT && state.us == ( ussize / 8 ) )
+          || ( op == e_op_code_POP_DAT && state.us == 0 ) )
+            rc = -1;
+         else
+         {
+            state.pc += rc;
+            if( op == e_op_code_PSH_DAT )
+               *( int64_t* )( p_data + dsize + cssize + ussize
+                - ( ++state.us * 8 ) ) = *( int64_t* )( p_data + ( addr * 8 ) );
+            else
+               *( int64_t* )( p_data + ( addr * 8 ) )
+                = *( int64_t* )( p_data + dsize + cssize + ussize - ( state.us-- * 8 ) );
+         }
+      }
+   }
+   else if( op == e_op_code_JMP_SUB )
+   {
+      int32_t addr;
+      rc = get_addr( p_code, csize, dsize, state, addr, true );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+               cout &lt;&lt; "JSR :" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr &lt;&lt; '\n';
+         }
+         else
+         {
+            if( state.cs == ( cssize / 8 ) )
+               rc = -1;
+            else if( state.jumps.count( addr ) )
+            {
+               *( int64_t* )( p_data + dsize + cssize - ( ++state.cs * 8 ) ) = state.pc + rc;
+               state.pc = addr;
+            }
+            else
+               rc = -2;
+         }
+      }
+   }
+   else if( op == e_op_code_RET_SUB )
+   {
+      rc = 1;
+
+      if( disassemble )
+      {
+         if( !determine_jumps )
+            cout &lt;&lt; "RET\n";
+      }
+      else
+      {
+         if( state.cs == 0 )
+            rc = -1;
+         else
+         {
+            int64_t val = *( int64_t* )( p_data + dsize + cssize - ( state.cs-- * 8 ) );
+            int32_t addr = ( int32_t )val;
+            if( state.jumps.count( addr ) )
+               state.pc = addr;
+            else
+               rc = -2;
+         }
+      }
+   }
+   else if( op == e_op_code_IND_DAT )
+   {
+      int32_t addr1, addr2;
+      rc = get_addrs( p_code, csize, dsize, state, addr1, addr2 );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t ) + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+               cout &lt;&lt; "SET @($" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr1 &lt;&lt; ") $" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2 &lt;&lt; "\n";
+         }
+         else
+         {
+            int64_t addr = *( int64_t* )( p_data + ( addr1 * 8 ) );
+
+            if( addr &lt; 0 || addr &gt; c_max_to_multiply
+             || ( addr * 8 ) &lt; 0 || ( addr * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize )
+               rc = -1;
+            else
+            {
+               state.pc += rc;
+              *( int64_t* )( p_data + ( addr * 8 ) ) = *( int64_t* )( p_data + ( addr2 * 8 ) );
+            }
+         }
+      }
+   }
+   else if( op == e_op_code_IDX_DAT )
+   {
+      int32_t addr1, addr2;
+      rc = get_addrs( p_code, csize, dsize, state, addr1, addr2 );
+
+      int32_t size = sizeof( int32_t ) + sizeof( int32_t );
+
+      if( rc == 0 || disassemble )
+      {
+         int32_t addr3;
+         rc = get_addr( p_code + size, csize, dsize, state, addr3 );
+
+         if( rc == 0 || disassemble )
+         {
+            rc = 1 + size + sizeof( int32_t );
+
+            if( disassemble )
+            {
+               if( !determine_jumps )
+                  cout &lt;&lt; "SET @($" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                   &lt;&lt; addr1 &lt;&lt; "+$" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2
+                   &lt;&lt; ") $" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr3 &lt;&lt; "\n";
+            }
+            else
+            {
+               int64_t base = *( int64_t* )( p_data + ( addr1 * 8 ) );
+               int64_t offs = *( int64_t* )( p_data + ( addr2 * 8 ) );
+
+               int64_t addr = base + offs;
+
+               if( addr &lt; 0 || addr &gt; c_max_to_multiply
+                || ( addr * 8 ) &lt; 0 || ( addr * 8 ) + ( int32_t )sizeof( int64_t ) &gt; dsize )
+                  rc = -1;
+               else
+               {
+                  state.pc += rc;
+                 *( int64_t* )( p_data + ( addr * 8 ) ) = *( int64_t* )( p_data + ( addr3 * 8 ) );
+               }
+            }
+         }
+      }
+   }
+   else if( op == e_op_code_MOD_DAT )
+   {
+      int32_t addr1, addr2;
+      rc = get_addrs( p_code, csize, dsize, state, addr1, addr2 );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t ) + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               cout &lt;&lt; "MOD @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr1 &lt;&lt; " $" &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2 &lt;&lt; '\n';
+            }
+         }
+         else
+         {
+            state.pc += rc;
+            int64_t val = *( int64_t* )( p_data + ( addr2 * 8 ) );
+
+            *( int64_t* )( p_data + ( addr1 * 8 ) ) %= val;
+         }
+      }
+   }
+   else if( op == e_op_code_SHL_DAT )
+   {
+      int32_t addr1, addr2;
+      rc = get_addrs( p_code, csize, dsize, state, addr1, addr2 );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t ) + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               cout &lt;&lt; "SHL @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr1 &lt;&lt; " $" &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2 &lt;&lt; '\n';
+            }
+         }
+         else
+         {
+            state.pc += rc;
+            int64_t val = *( int64_t* )( p_data + ( addr2 * 8 ) );
+
+            *( int64_t* )( p_data + ( addr1 * 8 ) ) &lt;&lt;= val;
+         }
+      }
+   }
+   else if( op == e_op_code_SHR_DAT )
+   {
+      int32_t addr1, addr2;
+      rc = get_addrs( p_code, csize, dsize, state, addr1, addr2 );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t ) + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               cout &lt;&lt; "SHR @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr1 &lt;&lt; " $" &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2 &lt;&lt; '\n';
+            }
+         }
+         else
+         {
+            state.pc += rc;
+            int64_t val = *( int64_t* )( p_data + ( addr2 * 8 ) );
+
+            *( int64_t* )( p_data + ( addr1 * 8 ) ) &gt;&gt;= val;
+         }
+      }
+   }
+   else if( op == e_op_code_JMP_ADR )
+   {
+      int32_t addr;
+      rc = get_addr( p_code, csize, dsize, state, addr, true );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+               cout &lt;&lt; "JMP :" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr &lt;&lt; '\n';
+         }
+         else if( state.jumps.count( addr ) )
+            state.pc = addr;
+         else
+            rc = -2;
+      }
+   }
+   else if( op == e_op_code_BZR_DAT || op == e_op_code_BNZ_DAT )
+   {
+      int8_t off;
+      int32_t addr;
+      rc = get_addr_off( p_code, csize, dsize, state, addr, off );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t ) + sizeof( int8_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               if( op == e_op_code_BZR_DAT )
+                  cout &lt;&lt; "BZR $";
+               else
+                  cout &lt;&lt; "BNZ $";
+
+               cout &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr &lt;&lt; " :" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; ( state.pc + off ) &lt;&lt; '\n';
+            }
+         }
+         else
+         {
+            int64_t val = *( int64_t* )( p_data + ( addr * 8 ) );
+
+            if( ( op == e_op_code_BZR_DAT && val == 0 )
+             || ( op == e_op_code_BNZ_DAT && val != 0 ) )
+            {
+               if( state.jumps.count( state.pc + off ) )
+                  state.pc += off;
+               else
+                  rc = -2;
+            }
+            else
+               state.pc += rc;
+         }
+      }
+   }
+   else if( op == e_op_code_BGT_DAT || op == e_op_code_BLT_DAT
+    || op == e_op_code_BGE_DAT || op == e_op_code_BLE_DAT
+    || op == e_op_code_BEQ_DAT || op == e_op_code_BNE_DAT )
+   {
+      int8_t off;
+      int32_t addr1, addr2;
+      rc = get_addrs_off( p_code, csize, dsize, state, addr1, addr2, off );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t ) + sizeof( int32_t ) + sizeof( int8_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               if( op == e_op_code_BGT_DAT )
+                  cout &lt;&lt; "BGT $";
+               else if( op == e_op_code_BLT_DAT )
+                  cout &lt;&lt; "BLT $";
+               else if( op == e_op_code_BGE_DAT )
+                  cout &lt;&lt; "BGE $";
+               else if( op == e_op_code_BLE_DAT )
+                  cout &lt;&lt; "BLE $";
+               else if( op == e_op_code_BEQ_DAT )
+                  cout &lt;&lt; "BEQ $";
+               else
+                  cout &lt;&lt; "BNE $";
+
+               cout &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr1 &lt;&lt; " $" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' )
+                &lt;&lt; addr2 &lt;&lt; " :" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; ( state.pc + off ) &lt;&lt; '\n';
+            }
+         }
+         else
+         {
+            int64_t val1 = *( int64_t* )( p_data + ( addr1 * 8 ) );
+            int64_t val2 = *( int64_t* )( p_data + ( addr2 * 8 ) );
+
+            if( ( op == e_op_code_BGT_DAT && val1 &gt; val2 )
+             || ( op == e_op_code_BLT_DAT && val1 &lt; val2 )
+             || ( op == e_op_code_BGE_DAT && val1 &gt;= val2 )
+             || ( op == e_op_code_BLE_DAT && val1 &lt;= val2 )
+             || ( op == e_op_code_BEQ_DAT && val1 == val2 )
+             || ( op == e_op_code_BNE_DAT && val1 != val2 ) )
+            {
+               if( state.jumps.count( state.pc + off ) )
+                  state.pc += off;
+               else
+                  rc = -2;
+            }
+            else
+               state.pc += rc;
+         }
+      }
+   }
+   else if( op == e_op_code_SLP_DAT )
+   {
+      int32_t addr;
+      rc = get_addr( p_code, csize, dsize, state, addr, true );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+               cout &lt;&lt; "SLP @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr &lt;&lt; '\n';
+         }
+         else
+         {
+            // NOTE: The "sleep_until" state value would be set to the current block + $addr.
+
+            state.pc += rc;
+         }
+      }
+   }
+   else if( op == e_op_code_FIZ_DAT || op == e_op_code_STZ_DAT )
+   {
+      int32_t addr;
+      rc = get_addr( p_code, csize, dsize, state, addr );
+
+      if( rc == 0 || disassemble )
+      {
+         if( disassemble )
+         {
+            rc = 1 + sizeof( int32_t );
+
+            if( !determine_jumps )
+            {
+               if( op == e_op_code_FIZ_DAT )
+                  cout &lt;&lt; "FIZ $";
+               else
+                  cout &lt;&lt; "STZ $";
+
+               cout &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr &lt;&lt; '\n';
+            }
+         }
+         else
+         {
+            if( *( int64_t* )( p_data + ( addr * 8 ) ) == 0 )
+            {
+               if( op == e_op_code_STZ_DAT )
+               {
+                  state.pc += rc;
+                  state.stopped = true;
+               }   
+               else
+               {
+                  state.pc = state.pcs;
+                  state.finished = true;
+               }
+            }
+            else
+            {
+               rc = 1 + sizeof( int32_t );
+               state.pc += rc;
+            }
+         }
+      }
+   }
+   else if( op == e_op_code_FIN_IMD || op == e_op_code_STP_IMD )
+   {
+      if( disassemble )
+      {
+         rc = 1;
+
+         if( !determine_jumps )
+         {
+            if( op == e_op_code_FIN_IMD )
+               cout &lt;&lt; "FIN\n";
+            else
+               cout &lt;&lt; "STP\n";
+         }
+      }
+      else if( op == e_op_code_STP_IMD )
+      {
+         state.pc += rc;
+         state.stopped = true;
+      }
+      else
+      {
+         state.pc = state.pcs;
+         state.finished = true;
+      }
+   }
+   else if( op == e_op_code_SLP_IMD )
+   {
+      if( rc == 0 || disassemble )
+      {
+         rc = 1;
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+               cout &lt;&lt; "SLP\n";
+         }
+         else
+         {
+            // NOTE: The "sleep_until" state value would be set to the current block + 1.
+
+            state.pc += rc;
+         }
+      }
+   }
+   else if( op == e_op_code_ERR_ADR )
+   {
+      int32_t addr;
+      rc = get_addr( p_code, csize, dsize, state, addr, true );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+               cout &lt;&lt; "ERR :" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr &lt;&lt; '\n';
+         }
+         else if( state.jumps.count( addr ) )
+            state.pce = addr;
+         else
+            rc = -3;
+      }
+   }
+   else if( op == e_op_code_SET_PCS )
+   {
+      rc = 1;
+
+      if( disassemble )
+      {
+         if( !determine_jumps )
+            cout &lt;&lt; "PCS\n";
+      }
+      else
+      {
+         state.pc += rc;
+         state.pcs = state.pc;
+      }
+   }
+   else if( op == e_op_code_EXT_FUN )
+   {
+      int16_t fun;
+      rc = get_fun( p_code, csize, state, fun );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int16_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               if( fun &lt; 0x100 )
+                  cout &lt;&lt; "FUN " &lt;&lt; dec &lt;&lt; fun &lt;&lt; "\n";
+               else
+                  cout &lt;&lt; "FUN " &lt;&lt; decode_function_name( fun, op ) &lt;&lt; "\n";
+            }
+         }
+         else
+         {
+            state.pc += rc;
+            func( fun, state );
+         }
+      }
+   }
+   else if( op == e_op_code_EXT_FUN_DAT )
+   {
+      int16_t fun;
+      int32_t addr;
+      rc = get_fun_addr( p_code, csize, dsize, state, fun, addr );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int16_t ) + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               if( fun &lt; 0x100 )
+                  cout &lt;&lt; "FUN " &lt;&lt; dec &lt;&lt; fun &lt;&lt; " $" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr &lt;&lt; "\n";
+               else
+                  cout &lt;&lt; "FUN " &lt;&lt; decode_function_name( fun, op )
+                   &lt;&lt; " $" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr &lt;&lt; "\n";
+            }
+         }
+         else
+         {
+            state.pc += rc;
+            int64_t val = *( int64_t* )( p_data + ( addr * 8 ) );
+
+            func1( fun, state, val, p_data, dsize );
+         }
+      }
+   }
+   else if( op == e_op_code_EXT_FUN_DAT_2 )
+   {
+      int16_t fun;
+      int32_t addr1, addr2;
+      rc = get_fun_addrs( p_code, csize, dsize, state, fun, addr1, addr2 );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int16_t ) + sizeof( int32_t ) + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               if( fun &lt; 0x100 )
+                  cout &lt;&lt; "FUN " &lt;&lt; dec &lt;&lt; fun &lt;&lt; " $" &lt;&lt; hex &lt;&lt; setw( 8 )
+                   &lt;&lt; setfill( '0' ) &lt;&lt; addr1 &lt;&lt; " $" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2 &lt;&lt; "\n";
+               else
+                  cout &lt;&lt; "FUN " &lt;&lt; decode_function_name( fun, op ) &lt;&lt; " $" &lt;&lt; hex &lt;&lt; setw( 8 )
+                   &lt;&lt; setfill( '0' ) &lt;&lt; addr1 &lt;&lt; " $" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2 &lt;&lt; "\n";
+            }
+         }
+         else
+         {
+            state.pc += rc;
+            int64_t val1 = *( int64_t* )( p_data + ( addr1 * 8 ) );
+            int64_t val2 = *( int64_t* )( p_data + ( addr2 * 8 ) );
+
+            func2( fun, state, val1, val2, p_data, dsize );
+         }
+      }
+   }
+   else if( op == e_op_code_EXT_FUN_RET )
+   {
+      int16_t fun;
+      int32_t addr;
+      rc = get_fun_addr( p_code, csize, dsize, state, fun, addr );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + sizeof( int16_t ) + sizeof( int32_t );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               if( fun &lt; 0x100 )
+                  cout &lt;&lt; "FUN @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr &lt;&lt; ' ' &lt;&lt; dec &lt;&lt; fun &lt;&lt; '\n';
+               else
+                  cout &lt;&lt; "FUN @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr
+                   &lt;&lt; " " &lt;&lt; decode_function_name( fun, op ) &lt;&lt; '\n';
+            }
+         }
+         else
+         {
+            state.pc += rc;
+            *( int64_t* )( p_data + ( addr * 8 ) ) = func( fun, state );
+         }
+      }
+   }
+   else if( op == e_op_code_EXT_FUN_RET_DAT || op == e_op_code_EXT_FUN_RET_DAT_2 )
+   {
+      int16_t fun;
+      int32_t addr1, addr2;
+      rc = get_fun_addrs( p_code, csize, dsize, state, fun, addr1, addr2 );
+
+      int32_t size = sizeof( int16_t ) + sizeof( int32_t ) + sizeof( int32_t );
+
+      int32_t addr3;
+      if( ( rc == 0 || disassemble ) && op == e_op_code_EXT_FUN_RET_DAT_2 )
+         rc = get_addr( p_code + size, csize, dsize, state, addr3 );
+
+      if( rc == 0 || disassemble )
+      {
+         rc = 1 + size + ( op == e_op_code_EXT_FUN_RET_DAT_2 ? sizeof( int32_t ) : 0 );
+
+         if( disassemble )
+         {
+            if( !determine_jumps )
+            {
+               if( fun &lt; 0x100 )
+                  cout &lt;&lt; "FUN @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr1
+                   &lt;&lt; ' ' &lt;&lt; dec &lt;&lt; fun &lt;&lt; " $" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2;
+               else
+                  cout &lt;&lt; "FUN @" &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr1 &lt;&lt; " "
+                   &lt;&lt; decode_function_name( fun, op ) &lt;&lt; " $" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr2;
+
+               if( op == e_op_code_EXT_FUN_RET_DAT_2 )
+                  cout &lt;&lt; " $" &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; addr3;
+
+               cout &lt;&lt; "\n";
+            }
+         }
+         else
+         {
+            state.pc += rc;
+            int64_t val = *( int64_t* )( p_data + ( addr2 * 8 ) );
+
+            if( op != e_op_code_EXT_FUN_RET_DAT_2 )
+               *( int64_t* )( p_data + ( addr1 * 8 ) ) = func1( fun, state, val, p_data, dsize );
+            else
+            {
+               int64_t val2 = *( int64_t* )( p_data + ( addr3 * 8 ) );
+               *( int64_t* )( p_data + ( addr1 * 8 ) ) = func2( fun, state, val, val2, p_data, dsize );
+            }
+         }
+      }
+   }
+   else
+   {
+      if( !disassemble )
+         rc = -2;
+   }
+
+   if( rc == -1 && state.pce )
+   {
+      rc = 0;
+      state.pc = state.pce;
+   }
+
+   if( rc == -1 && disassemble && !determine_jumps )
+      cout &lt;&lt; "\n(overflow)\n";
+
+   if( rc == -2 && disassemble && !determine_jumps )
+      cout &lt;&lt; "\n(invalid op)\n";
+
+   if( rc &gt;= 0 )
+      ++state.steps;
+
+   return rc;
+}
+
+void dump_state( const machine_state& state )
+{
+   cout &lt;&lt; "pc: " &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.pc &lt;&lt; '\n';
+
+   cout &lt;&lt; "cs: " &lt;&lt; dec &lt;&lt; state.cs &lt;&lt; '\n';
+   cout &lt;&lt; "us: " &lt;&lt; dec &lt;&lt; state.us &lt;&lt; '\n';
+
+   cout &lt;&lt; "pce: " &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.pcs &lt;&lt; '\n';
+   cout &lt;&lt; "pcs: " &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.pcs &lt;&lt; '\n';
+
+   cout &lt;&lt; "steps: " &lt;&lt; dec &lt;&lt; state.steps &lt;&lt; '\n';
+
+   cout &lt;&lt; "a1: " &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.a1 &lt;&lt; '\n';
+   cout &lt;&lt; "a2: " &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.a2 &lt;&lt; '\n';
+   cout &lt;&lt; "a3: " &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.a3 &lt;&lt; '\n';
+   cout &lt;&lt; "a4: " &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.a4 &lt;&lt; '\n';
+
+   cout &lt;&lt; "b1: " &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.b1 &lt;&lt; '\n';
+   cout &lt;&lt; "b2: " &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.b2 &lt;&lt; '\n';
+   cout &lt;&lt; "b3: " &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.b3 &lt;&lt; '\n';
+   cout &lt;&lt; "b4: " &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; setfill( '0' ) &lt;&lt; state.b4 &lt;&lt; '\n';
+}
+
+void dump_bytes( int8_t* p_bytes, int num )
+{
+   for( int i = 0; i &lt; num; i += 16 )
+   {
+      cout &lt;&lt; hex &lt;&lt; setw( 8 ) &lt;&lt; setfill( '0' ) &lt;&lt; i &lt;&lt; ' ';
+
+      for( int j = 0; j &lt; 16; j++ )
+      {
+         int val = ( unsigned char )p_bytes[ i + j ];
+
+         cout &lt;&lt; ' ' &lt;&lt; hex &lt;&lt; setw( 2 ) &lt;&lt; setfill( '0' ) &lt;&lt; val;
+      }
+
+      cout &lt;&lt; '\n';
+   }
+}
+
+void list_code( machine_state& state, int8_t* p_code, int32_t csize,
+ int8_t* p_data, int32_t dsize, int32_t cssize, int32_t ussize, bool determine_jumps = false )
+{
+   int32_t opc = state.pc;
+   int32_t osteps = state.steps;
+
+   state.pc = 0;
+   state.opc = opc;
+
+   while( true )
+   {
+      int rc = process_op( p_code, csize, p_data, dsize, cssize, ussize, true, determine_jumps, state );
+
+      if( rc &lt;= 0 )
+         break;
+
+      state.pc += rc;
+   }
+
+   state.steps = osteps;
+   state.pc = opc;
+}
+
+bool check_has_balance( )
+{
+   if( g_balance == 0 )
+   {
+      cout &lt;&lt; "(stopped - zero balance)\n";
+      return false;
+   }
+   else
+      return true;
+}
+
+void reset_machine( machine_state& state,
+ int8_t* p_code, int32_t csize, int8_t* p_data, int32_t dsize, int32_t cssize, int32_t ussize )
+{
+   state.reset( );
+   list_code( state, p_code, csize, p_data, dsize, cssize, ussize, true );
+
+   memset( p_data, 0, dsize + cssize + ussize );
+
+   g_first_call = true;
+
+   for( map&lt; int32_t, function_data &gt;::iterator i = g_function_data.begin( ); i != g_function_data.end( ); ++i )
+      i-&gt;second.offset = 0;
+}
+
+int main( )
+{
+   auto_ptr&lt; int8_t &gt; ap_code( new int8_t[ g_code_pages * c_code_page_bytes ] );
+   auto_ptr&lt; int8_t &gt; ap_data( new int8_t[ g_data_pages * c_data_page_bytes
+    + g_call_stack_pages * c_call_stack_page_bytes + g_user_stack_pages * c_user_stack_page_bytes ] );
+
+   memset( ap_code.get( ), 0, g_code_pages * c_code_page_bytes );
+   memset( ap_data.get( ), 0, g_data_pages * c_data_page_bytes
+    + g_call_stack_pages * c_call_stack_page_bytes + g_user_stack_pages * c_user_stack_page_bytes );
+
+   machine_state state;
+   set&lt; int32_t &gt; break_points;
+
+   string cmd, next;
+   while( cout &lt;&lt; "\n&gt; ", getline( cin, next ) )
+   {
+      if( next.empty( ) )
+         continue;
+
+      string::size_type pos = next.find( ' ' );
+      if( pos == string::npos )
+      {
+         cmd = next;
+         next.erase( );
+      }
+      else
+      {
+         cmd = next.substr( 0, pos );
+         next.erase( 0, pos + 1 );
+      }
+
+      string arg_1, arg_2, arg_3;
+
+      pos = next.find( ' ' );
+      arg_1 = next.substr( 0, pos );
+      if( pos != string::npos )
+      {
+         arg_2 = next.substr( pos + 1 );
+
+         pos = arg_2.find( ' ' );
+         if( pos != string::npos )
+         {
+            arg_3 = arg_2.substr( pos + 1 );
+            arg_2.erase( pos );
+         }
+      }
+
+      if( cmd == "?" || cmd == "help" )
+      {
+         cout &lt;&lt; "commands:\n";
+         cout &lt;&lt; "---------\n";
+         cout &lt;&lt; "code &lt;hex byte values&gt; [&lt;[0x]offset&gt;]\n";
+         cout &lt;&lt; "data &lt;hex byte values&gt; [&lt;[0x]offset&gt;]\n";
+         cout &lt;&lt; "run\n";
+         cout &lt;&lt; "cont\n";
+         cout &lt;&lt; "dump {code|data|stacks}\n";
+         cout &lt;&lt; "list\n";
+         cout &lt;&lt; "load &lt;file&gt;\n";
+         cout &lt;&lt; "save &lt;file&gt;\n";
+         cout &lt;&lt; "size [{code|data|call|user} [&lt;pages&gt;]]\n";
+         cout &lt;&lt; "step [&lt;num_steps&gt;]\n";
+         cout &lt;&lt; "break &lt;[0x]value&gt;\n";
+         cout &lt;&lt; "reset\n";
+         cout &lt;&lt; "state\n";
+         cout &lt;&lt; "balance [&lt;amount&gt;]\n";
+         cout &lt;&lt; "function &lt;[+]#&gt; [&lt;[0x]value1[,[0x]value2[,...]]&gt;] [loop]\n";
+         cout &lt;&lt; "functions\n";
+         cout &lt;&lt; "help\n";
+         cout &lt;&lt; "exit" &lt;&lt; endl;
+      }
+      else if( ( cmd == "code" || cmd == "data" ) && arg_1.size( ) && ( arg_1.size( ) % 2 == 0 ) )
+      {
+         int32_t offset = 0;
+         if( !arg_2.empty( ) )
+         {
+            if( arg_2.size( ) &gt; 2 && arg_2.find( "0x" ) == 0 )
+            {
+               istringstream isstr( arg_2.substr( 2 ) );
+               isstr &gt;&gt; hex &gt;&gt; offset;
+            }
+            else
+               offset = atoi( arg_2.c_str( ) );
+         }
+
+         int8_t* p_c = cmd == "code" ? ap_code.get( ) : ap_data.get( ) + offset;
+
+         if( arg_2.empty( ) )
+         {
+            if( cmd == "code" )
+               memset( p_c, 0, g_code_pages * c_code_page_bytes );
+            else
+               memset( p_c, 0, g_data_pages * c_data_page_bytes );
+         }
+
+         for( size_t i = 0; i &lt; arg_1.size( ); i += 2 )
+         {
+            unsigned int value;
+            istringstream isstr( arg_1.substr( i, 2 ) );
+            isstr &gt;&gt; hex &gt;&gt; value;
+
+            *( p_c + ( i / 2 ) ) = ( int8_t )value;
+         }
+
+         if( cmd == "code" )
+            reset_machine( state,
+             ap_code.get( ), g_code_pages * c_code_page_bytes,
+             ap_data.get( ), g_data_pages * c_data_page_bytes,
+             g_call_stack_pages * c_call_stack_page_bytes, g_user_stack_pages * c_user_stack_page_bytes );
+      }
+      else if( cmd == "run" || cmd == "cont" )
+      {
+         if( cmd == "run" )
+            reset_machine( state, ap_code.get( ),
+             g_code_pages * c_code_page_bytes, ap_data.get( ), g_data_pages * c_data_page_bytes,
+             g_call_stack_pages * c_call_stack_page_bytes, g_user_stack_pages * c_user_stack_page_bytes );
+
+         while( true )
+         {
+            if( !check_has_balance( ) )
+               break;
+
+            int rc = process_op(
+             ap_code.get( ), g_code_pages * c_code_page_bytes,
+             ap_data.get( ), g_data_pages * c_data_page_bytes,
+             g_call_stack_pages * c_call_stack_page_bytes,
+             g_user_stack_pages * c_user_stack_page_bytes, false, false, state );
+
+            if( !check_has_balance( ) )
+               break;
+
+            --g_balance;
+
+            if( rc &gt;= 0 )
+            {
+               if( state.stopped )
+               {
+                  cout &lt;&lt; "(stopped)\n";
+                  cout &lt;&lt; "total steps: " &lt;&lt; dec &lt;&lt; state.steps &lt;&lt; '\n';
+
+                  state.stopped = false;
+                  break;
+               }
+               else if( state.finished )
+               {
+                  cout &lt;&lt; "(finished)\n";
+                  cout &lt;&lt; "total steps: " &lt;&lt; dec &lt;&lt; state.steps &lt;&lt; '\n';
+
+                  break;
+               }
+
+               if( break_points.count( state.pc ) )
+               {
+                  cout &lt;&lt; "(break point)\n";
+                  break;
+               }
+            }
+            else
+            {
+               if( rc == -1 )
+                  cout &lt;&lt; "error: overflow\n";
+               else if( rc == -2 )
+                  cout &lt;&lt; "error: invalid code\n";
+               else
+                  cout &lt;&lt; "unexpected error\n";
+
+               break;
+            }
+         }
+      }
+      else if( cmd == "dump" && ( next == "code" || next == "data" || next == "stacks" ) )
+      {
+         if( next == "code" )
+            dump_bytes( ap_code.get( ), g_code_pages * c_code_page_bytes );
+         else if( next == "data" )
+            dump_bytes( ap_data.get( ), g_data_pages * c_data_page_bytes );
+         else
+            dump_bytes( ap_data.get( ) + g_data_pages * c_data_page_bytes,
+             g_call_stack_pages * c_call_stack_page_bytes + g_user_stack_pages * c_user_stack_page_bytes );
+      }
+      else if( cmd == "list" )
+         list_code( state,
+          ap_code.get( ), g_code_pages * c_code_page_bytes,
+          ap_data.get( ), g_data_pages * c_data_page_bytes,
+          g_call_stack_pages * c_call_stack_page_bytes, g_user_stack_pages * c_user_stack_page_bytes );
+      else if( cmd == "load" && !arg_1.empty( ) )
+      {
+         ifstream inpf( arg_1.c_str( ), ios::in | ios::binary );
+
+         if( !inpf )
+            cout &lt;&lt; "error: unable to open '" &lt;&lt; arg_1 &lt;&lt; "' for input" &lt;&lt; endl;
+         else
+         {
+            inpf.read( ( char* )&g_val, sizeof( g_val ) );
+            inpf.read( ( char* )&g_val1, sizeof( g_val1 ) );
+            inpf.read( ( char* )&g_balance, sizeof( g_balance ) );
+            inpf.read( ( char* )&g_first_call, sizeof( g_first_call ) );
+            inpf.read( ( char* )&g_increment_func, sizeof( g_increment_func ) );
+
+            inpf.read( ( char* )&state.pc, sizeof( state.pc ) );
+            inpf.read( ( char* )&state.cs, sizeof( state.cs ) );
+            inpf.read( ( char* )&state.us, sizeof( state.us ) );
+            inpf.read( ( char* )&state.pce, sizeof( state.pce ) );
+            inpf.read( ( char* )&state.pcs, sizeof( state.pcs ) );
+            inpf.read( ( char* )&state.steps, sizeof( state.steps ) );
+
+            inpf.read( ( char* )&state.a1, sizeof( state.a1 ) );
+            inpf.read( ( char* )&state.a2, sizeof( state.a2 ) );
+            inpf.read( ( char* )&state.a3, sizeof( state.a3 ) );
+            inpf.read( ( char* )&state.a4, sizeof( state.a4 ) );
+
+            inpf.read( ( char* )&state.b1, sizeof( state.b1 ) );
+            inpf.read( ( char* )&state.b2, sizeof( state.b2 ) );
+            inpf.read( ( char* )&state.b3, sizeof( state.b3 ) );
+            inpf.read( ( char* )&state.b4, sizeof( state.b4 ) );
+
+            inpf.read( ( char* )&g_code_pages, sizeof( g_code_pages ) );
+            ap_code.reset( new int8_t[ g_code_pages * c_code_page_bytes ] );
+
+            inpf.read( ( char* )ap_code.get( ), g_code_pages * c_code_page_bytes );
+
+            inpf.read( ( char* )&g_data_pages, sizeof( g_data_pages ) );
+            inpf.read( ( char* )&g_call_stack_pages, sizeof( g_call_stack_pages ) );
+            inpf.read( ( char* )&g_user_stack_pages, sizeof( g_user_stack_pages ) );
+
+            ap_data.reset( new int8_t[ g_data_pages * c_data_page_bytes
+            + g_call_stack_pages * c_call_stack_page_bytes + g_user_stack_pages * c_user_stack_page_bytes ] );
+
+            inpf.read( ( char* )ap_data.get( ), g_data_pages * c_data_page_bytes
+             + g_call_stack_pages * c_call_stack_page_bytes + g_user_stack_pages * c_user_stack_page_bytes );
+
+            g_function_data.clear( );
+
+            size_t size;
+            inpf.read( ( char* )&size, sizeof( size_t ) );
+
+            for( size_t i = 0; i &lt; size; i++ )
+            {
+               int32_t func;
+               inpf.read( ( char* )&func, sizeof( int32_t ) );
+
+               bool loop;
+               inpf.read( ( char* )&loop, sizeof( bool ) );
+
+               size_t offset;
+               inpf.read( ( char* )&offset, sizeof( size_t ) );
+
+               g_function_data[ func ].loop = loop;
+               g_function_data[ func ].offset = offset;
+
+               size_t dsize;
+               inpf.read( ( char* )&dsize, sizeof( size_t ) );
+
+               for( size_t j = 0; j &lt; dsize; j++ )
+               {
+                  int64_t next;
+                  inpf.read( ( char* )&next, sizeof( int64_t ) );
+
+                  g_function_data[ func ].data.push_back( next );
+               }
+            }
+
+            inpf.close( );
+
+            list_code( state,
+             ap_code.get( ), g_code_pages * c_code_page_bytes,
+             ap_data.get( ), g_data_pages * c_data_page_bytes,
+             g_call_stack_pages * c_call_stack_page_bytes, g_user_stack_pages * c_user_stack_page_bytes, true );
+         }
+      }
+      else if( cmd == "save" && !arg_1.empty( ) )
+      {
+         ofstream outf( arg_1.c_str( ), ios::out | ios::binary );
+
+         if( !outf )
+            cout &lt;&lt; "error: unable to open '" &lt;&lt; arg_1 &lt;&lt; "' for output" &lt;&lt; endl;
+         else
+         {
+            outf.write( ( const char* )&g_val, sizeof( g_val ) );
+            outf.write( ( const char* )&g_val1, sizeof( g_val1 ) );
+            outf.write( ( const char* )&g_balance, sizeof( g_balance ) );
+            outf.write( ( const char* )&g_first_call, sizeof( g_first_call ) );
+            outf.write( ( const char* )&g_increment_func, sizeof( g_increment_func ) );
+
+            outf.write( ( const char* )&state.pc, sizeof( state.pc ) );
+            outf.write( ( const char* )&state.cs, sizeof( state.cs ) );
+            outf.write( ( const char* )&state.us, sizeof( state.us ) );
+            outf.write( ( const char* )&state.pce, sizeof( state.pce ) );
+            outf.write( ( const char* )&state.pcs, sizeof( state.pcs ) );
+            outf.write( ( const char* )&state.steps, sizeof( state.steps ) );
+
+            outf.write( ( const char* )&state.a1, sizeof( state.a1 ) );
+            outf.write( ( const char* )&state.a2, sizeof( state.a2 ) );
+            outf.write( ( const char* )&state.a3, sizeof( state.a3 ) );
+            outf.write( ( const char* )&state.a4, sizeof( state.a4 ) );
+
+            outf.write( ( const char* )&state.b1, sizeof( state.b1 ) );
+            outf.write( ( const char* )&state.b2, sizeof( state.b2 ) );
+            outf.write( ( const char* )&state.b3, sizeof( state.b3 ) );
+            outf.write( ( const char* )&state.b4, sizeof( state.b4 ) );
+
+            outf.write( ( const char* )&g_code_pages, sizeof( g_code_pages ) );
+            outf.write( ( const char* )ap_code.get( ), g_code_pages * c_code_page_bytes );
+
+            outf.write( ( const char* )&g_data_pages, sizeof( g_data_pages ) );
+            outf.write( ( const char* )&g_call_stack_pages, sizeof( g_call_stack_pages ) );
+            outf.write( ( const char* )&g_user_stack_pages, sizeof( g_user_stack_pages ) );
+
+            outf.write( ( const char* )ap_data.get( ), g_data_pages * c_data_page_bytes
+             + g_call_stack_pages * c_call_stack_page_bytes + g_user_stack_pages * c_user_stack_page_bytes );
+
+            size_t size = g_function_data.size( );
+            outf.write( ( const char* )&size, sizeof( size_t ) );
+
+            for( map&lt; int32_t, function_data &gt;::iterator i = g_function_data.begin( ); i != g_function_data.end( ); ++i )
+            {
+               outf.write( ( const char* )&i-&gt;first, sizeof( int32_t ) );
+               outf.write( ( const char* )&i-&gt;second.loop, sizeof( bool ) );
+               outf.write( ( const char* )&i-&gt;second.offset, sizeof( size_t ) );
+
+               size_t dsize = i-&gt;second.data.size( );
+               outf.write( ( const char* )&dsize, sizeof( size_t ) );
+
+               for( size_t j = 0; j &lt; dsize; j++ )
+                  outf.write( ( const char* )&i-&gt;second.data[ j ], sizeof( int64_t ) );
+            }
+
+            outf.close( );
+         }
+      }
+      else if( cmd == "size" )
+      {
+         if( arg_1.empty( ) || arg_2.empty( ) )
+         {
+            if( arg_1.empty( ) || arg_1 == "code" )
+               cout &lt;&lt; "code (" &lt;&lt; g_code_pages &lt;&lt; " * "
+                &lt;&lt; c_code_page_bytes &lt;&lt; ") = " &lt;&lt; ( g_code_pages * c_code_page_bytes ) &lt;&lt; " bytes\n";
+
+            if( arg_1.empty( ) || arg_1 == "data" )
+               cout &lt;&lt; "data (" &lt;&lt; g_data_pages &lt;&lt; " * "
+                &lt;&lt; c_data_page_bytes &lt;&lt; ") = " &lt;&lt; ( g_data_pages * c_data_page_bytes ) &lt;&lt; " bytes\n";
+
+            if( arg_1.empty( ) || arg_1 == "call" )
+               cout &lt;&lt; "call (" &lt;&lt; g_call_stack_pages &lt;&lt; " * "
+                &lt;&lt; c_call_stack_page_bytes &lt;&lt; ") = " &lt;&lt; ( g_call_stack_pages * c_call_stack_page_bytes ) &lt;&lt; " bytes\n";
+
+            if( arg_1.empty( ) || arg_1 == "user" )
+               cout &lt;&lt; "user (" &lt;&lt; g_user_stack_pages &lt;&lt; " * "
+                &lt;&lt; c_user_stack_page_bytes &lt;&lt; ") = " &lt;&lt; ( g_user_stack_pages * c_user_stack_page_bytes ) &lt;&lt; " bytes\n";
+         }
+         else
+         {
+            int pages = atoi( arg_2.c_str( ) );
+            if( pages &lt;= 0 )
+               throw runtime_error( "invalid # pages value: " + arg_2 );
+
+            if( arg_1 == "code" )
+            {
+               g_code_pages = pages;
+
+               ap_code.reset( new int8_t[ g_code_pages * c_code_page_bytes ] );
+
+               memset( ap_code.get( ), 0, g_code_pages * c_code_page_bytes );
+            }
+            else
+            {
+               if( arg_1 == "data" )
+                  g_data_pages = pages;
+               else if( arg_1 == "call" )
+                  g_call_stack_pages = pages;
+               else if( arg_1 == "user" )
+                  g_user_stack_pages = pages;
+               else
+                  throw runtime_error( "unexpected arg_1 '" + arg_1 + "' for 'size' command" );
+
+               ap_data.reset( new int8_t[ g_data_pages * c_data_page_bytes
+               + g_call_stack_pages * c_call_stack_page_bytes + g_user_stack_pages * c_user_stack_page_bytes ] );
+
+               memset( ap_data.get( ), 0, g_data_pages * c_data_page_bytes
+                + g_call_stack_pages * c_call_stack_page_bytes + g_user_stack_pages * c_user_stack_page_bytes );
+            }
+         }
+      }
+      else if( cmd == "step" )
+      {
+         int32_t steps = 0;
+         int32_t num_steps = 0;
+
+         if( !arg_1.empty( ) )
+            num_steps = atoi( arg_1.c_str( ) );
+
+         if( state.finished )
+            reset_machine( state,
+             ap_code.get( ), g_code_pages * c_code_page_bytes,
+             ap_data.get( ), g_data_pages * c_data_page_bytes,
+             g_call_stack_pages * c_call_stack_page_bytes, g_user_stack_pages * c_user_stack_page_bytes );
+
+         while( true )
+         {
+            if( !check_has_balance( ) )
+               break;
+
+            int rc = process_op(
+             ap_code.get( ), g_code_pages * c_code_page_bytes,
+             ap_data.get( ), g_data_pages * c_data_page_bytes,
+             g_call_stack_pages * c_call_stack_page_bytes,
+             g_user_stack_pages * c_user_stack_page_bytes, false, false, state );
+
+            if( !check_has_balance( ) )
+               break;
+
+            --g_balance;
+
+            if( rc &gt;= 0 )
+            {
+               ++steps;
+               if( state.stopped || state.finished || num_steps && steps &gt;= num_steps )
+               {
+                  if( state.stopped )
+                     cout &lt;&lt; "(stopped)\n";
+                  else if( state.finished )
+                     cout &lt;&lt; "(finished)\n";
+
+                  break;
+               }
+               else if( !num_steps )
+                  break;
+            }
+            else
+            {
+               if( rc == -1 )
+                  cout &lt;&lt; "error: overflow\n";
+               else if( rc == -2 )
+                  cout &lt;&lt; "error: invalid code\n";
+               else
+                  cout &lt;&lt; "unexpected error\n";
+
+               break;
+            }
+         }
+      }
+      else if( cmd == "break" )
+      {
+         if( arg_1.empty( ) )
+         {
+            for( set&lt; int32_t &gt;::iterator i = break_points.begin( ); i != break_points.end( ); ++i )
+               cout &lt;&lt; *i &lt;&lt; '\n';
+         }
+         else
+         {
+            int32_t bp;
+            if( arg_1.size( ) &gt; 2 && arg_1.find( "0x" ) == 0 )
+            {
+               istringstream isstr( arg_1.substr( 2 ) );
+               isstr &gt;&gt; hex &gt;&gt; bp;
+            }
+            else
+               bp = atoi( arg_1.c_str( ) );
+
+            if( break_points.count( bp ) )
+               break_points.erase( bp );
+            else
+               break_points.insert( bp );
+         }
+      }
+      else if( cmd == "reset" )
+         reset_machine( state,
+          ap_code.get( ), g_code_pages * c_code_page_bytes,
+          ap_data.get( ), g_data_pages * c_data_page_bytes,
+          g_call_stack_pages * c_call_stack_page_bytes, g_user_stack_pages * c_user_stack_page_bytes );
+      else if( cmd == "state" )
+         dump_state( state );
+      else if( cmd == "balance" )
+      {
+         if( arg_1.empty( ) )
+            cout &lt;&lt; dec &lt;&lt; g_balance &lt;&lt; '\n';
+         else
+            g_balance = atoi( arg_1.c_str( ) );
+      }
+      else if( cmd == "function" && !arg_1.empty( ) )
+      {
+         bool is_increment_func = false;
+         if( arg_1[ 0 ] == '+' )
+         {
+            is_increment_func = true;
+            arg_1.erase( 0, 1 );
+         }
+
+         int32_t func = atoi( arg_1.c_str( ) );
+
+         if( is_increment_func )
+            g_increment_func = func;
+
+         if( ( !is_increment_func || !arg_2.empty( ) ) && g_function_data.count( func ) )
+            g_function_data.erase( func );
+
+         if( !arg_2.empty( ) )
+         {
+            while( true )
+            {
+               string::size_type pos = arg_2.find( ',' );
+
+               string next( arg_2.substr( 0, pos ) );
+
+               int64_t val;
+               if( next.size( ) &gt; 2 && next.find( "0x" ) == 0 )
+               {
+                  istringstream isstr( next );
+                  isstr &gt;&gt; hex &gt;&gt; val;
+               }
+               else
+                  val = atoi( next.c_str( ) );
+
+               g_function_data[ func ].data.push_back( val );
+
+               if( pos == string::npos )
+                  break;
+
+               arg_2.erase( 0, pos + 1 );
+            }
+
+            if( arg_3 == "true" )
+               g_function_data[ func ].loop = true;
+         }
+      }
+      else if( cmd == "functions" )
+      {
+         for( map&lt; int32_t, function_data &gt;::iterator i = g_function_data.begin( ); i != g_function_data.end( ); ++i )
+         {
+            if( i-&gt;first == g_increment_func )
+               cout &lt;&lt; '+';
+            else
+               cout &lt;&lt; ' ';
+
+            cout &lt;&lt; dec &lt;&lt; setw( 3 ) &lt;&lt; setfill( '0' ) &lt;&lt; i-&gt;first;
+
+            for( size_t j = 0; j &lt; i-&gt;second.data.size( ); j++ )
+               cout &lt;&lt; ( j == 0 ? ' ' : ',' ) &lt;&lt; "0x" &lt;&lt; hex &lt;&lt; setw( 16 ) &lt;&lt; i-&gt;second.data[ j ];
+
+            if( i-&gt;second.loop )
+               cout &lt;&lt; " true\n";
+            else
+               cout &lt;&lt; " false\n";
+         }
+      }
+      else if( cmd == "quit" || cmd == "exit" )
+         break;
+      else
+         cout &lt;&lt; "invalid command: " &lt;&lt; cmd &lt;&lt; endl;
+   }
+}
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

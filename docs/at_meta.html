@@ -1,0 +1,119 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - AT Metadata for UI</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">AT Metadata for UI</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+AT Metadata for UI
+------------------
+
+The following are suggestions for how metadata could be added to an AT in order to provide a flexible UI that
+allows for both lists and views (the latter also being able to function as a form). For enums icons which are
+named in the form &lt;label&gt;.png would be optionally able to be displayed. The file format used here is known as
+"structured I/O" and comes from the CIYAM project (https://github.com/ciyam/ciyam/blob/master/src/sio.cpp).
+
+&lt;enums/&gt;
+ &lt;enum/&gt;
+  &lt;name&gt;playing_card
+  &lt;options&gt;use_icons
+  &lt;items/&gt;
+   &lt;item/&gt;
+    &lt;value&gt;1
+    &lt;label&gt;clubs_ace
+   &lt;/item&gt;
+   &lt;item/&gt;
+    &lt;value&gt;2
+    &lt;label&gt;clubs_two
+   &lt;/item&gt;
+...
+   &lt;item/&gt;
+    &lt;value&gt;17
+    &lt;label&gt;diamonds_ace
+   &lt;/item&gt;
+   &lt;item/&gt;
+    &lt;value&gt;18
+    &lt;label&gt;diamonds_two
+   &lt;/item&gt;
+...
+  &lt;/items&gt;
+ &lt;/enum&gt;
+&lt;/enums&gt;
+
+&lt;views/&gt;
+ &lt;view/&gt;
+  &lt;name&gt;card
+  &lt;style&gt;normal
+  &lt;actions&gt;
+  &lt;options&gt;runtime,no_edit
+  &lt;view_fields/&gt;
+   &lt;view_field/&gt;
+    &lt;label&gt;card
+    &lt;value&gt;0000007f
+    &lt;options&gt;enum=playing_card
+    &lt;variety&gt;byte
+   &lt;/view_field&gt;
+   &lt;view_field/&gt;
+    &lt;label&gt;selected
+    &lt;value&gt;00000080
+    &lt;options&gt;
+    &lt;variety&gt;bool
+   &lt;/view_field&gt;
+  &lt;/view_fields&gt;
+ &lt;/view&gt;
+&lt;/views&gt;
+
+&lt;lists/&gt;
+ &lt;list/&gt;
+  &lt;view&gt;card
+  &lt;style&gt;normal
+  &lt;actions&gt;shuffle=message:1,select=message:2
+  &lt;options&gt;runtime
+  &lt;list_fields/&gt;
+   &lt;list_field/&gt;
+    &lt;label&gt;card_1
+    &lt;extra&gt;selected=00000080
+    &lt;address&gt;00000000:0000007f
+    &lt;options&gt;enum=playing_card
+    &lt;variety&gt;byte
+   &lt;/list_field&gt;
+   &lt;list_field/&gt;
+    &lt;label&gt;card_2
+    &lt;extra&gt;selected=00008000
+    &lt;address&gt;00000000:00007f00
+    &lt;options&gt;enum=playing_card
+    &lt;variety&gt;byte
+   &lt;/list_field&gt;
+...
+  &lt;/list_fields&gt;
+ &lt;/list&gt;
+&lt;/lists&gt;
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

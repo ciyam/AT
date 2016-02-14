@@ -1,0 +1,148 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Integrating AT with Script</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Integrating AT with Script</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Integrating AT with Script
+--------------------------
+
+It is not expected that any crypto-currency using Bitcoin's "script" is going to try and extend it so that it
+could execute Turing complete scripts. This document therefore suggests a "minimal" approach that would allow
+AT to operate externally by adding a single op code (OP_CHECKSTATE).
+
+AT Address Format
+-----------------
+
+An AT cannot have a "normal" address as it does not have a private key. It is suggested that a custom address
+format would be "reserved" for AT's (so every peer can recognise when funds are being to be sent to an AT and
+so that end users can "easily recognise" such addresses and not confuse them with standard addresses).
+
+The following is a suggestion as to how this might be done:
+
+1xxATxx&lt;MD5 of AT&gt;[checksum]
+
+So an AT address might look like the following:
+1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg
+
+and consists of 3 parts:
+1xxATxx (prefix) YptzC5a7p9obc2SLMPS148G (MD5 in base58) 2Qxg (normal address checksum)
+
+Thus if a user goes to send funds to 1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg then the client would see the special
+"1xxATxx" prefix and could "warn" the user that they are possibly sending funds to an AT (assuming that it is
+not the AT creation transaction).
+
+Creating an AT
+--------------
+
+So assuming the creator has a UTXO that has 600 satoshis and that the "AT creation fee" is 500 satoshis, with
+the creator wanting to give the AT an initial balance of 100 satoshis, the AT creation transaction would look
+very similar to this (assuming an "implicit" tx fee of 1 satoshi):
+
+INPUT:
+OP_DUP OP_HASH160 &lt;creator's address hash160&gt; OP_EQUALVERIFY OP_CHECKSIG amount: 600
+
+OUTPUT:
+script: hash160(1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg) OP_CHECKSTATE amount: 599
+script: OP_RETURN &lt;meta, state, code and initial data&gt;
+
+Mining a new AT
+---------------
+
+Upon receiving an AT creation tx the miner would check that the fee is sufficient then it would determine the
+initial "state" of the AT by determining a hash of the entire AT image (which could be saved as a binary file
+or stored in DB). This "state" hash would then be prefixed to the OP_CHECKSTATE script. The "initial balance"
+for the AT would appear as an output that is identical to the original UXTO script.
+
+INPUT:
+&lt;state&gt; hash160(1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg) OP_CHECKSTATE amount: 599
+
+OUTPUT:
+script: hash160(1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg) OP_CHECKSTATE amount: 100
+...
+script: OP_DUP OP_HASH160 &lt;miner's address hash160&gt; OP_EQUALVERIFY OP_CHECKSIG amount: 499 (i.e. rest of fee)
+
+Note that every peer would also need to run AT in order to be able to verify that the AT state is correct. So
+it is important that there are "maximum limits" (such as how many AT steps can be executed per AT and perhaps
+how many ATs can be included per block so there is no way to "kill a node" with an AT).
+
+Sending Funds to an AT
+----------------------
+
+Assuming we had a "lottery" AT and we have three entrants each sending 100 satoshis then the transactions the
+peers send would look much like the following:
+
+(sender1)
+INPUT:
+OP_DUP OP_HASH160 &lt;sender1 address hash160&gt; OP_EQUALVERIFY OP_CHECKSIG amount: 101
+
+OUTPUT:
+script: hash160(1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg) OP_CHECKSTATE amount: 100
+
+(sender2)
+INPUT:
+OP_DUP OP_HASH160 &lt;sender2 address hash160&gt; OP_EQUALVERIFY OP_CHECKSIG amount: 101
+
+OUTPUT:
+script: hash160(1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg) OP_CHECKSTATE amount: 100
+
+(sender3)
+INPUT:
+OP_DUP OP_HASH160 &lt;sender3 address hash160&gt; OP_EQUALVERIFY OP_CHECKSIG amount: 101
+
+OUTPUT:
+script: hash160(1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg) OP_CHECKSTATE amount: 100
+
+The output scripts use OP_CHECKSTATE (rather than OP_CHECKSIG like regular transactions) hence why the custom
+address format is suggested (otherwise the end-user would have to "instruct the software to do an AT send").
+
+Processing an AT
+----------------
+
+INPUT:
+&lt;state&gt; hash160(1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg) OP_CHECKSTATE (original 100)
+&lt;state&gt; hash160(1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg) OP_CHECKSTATE (sender1's 100)
+&lt;state&gt; hash160(1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg) OP_CHECKSTATE (sender2's 100)
+&lt;state&gt; hash160(1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg) OP_CHECKSTATE (sender3's 100)
+
+OUTPUT:
+script: OP_DUP OP_HASH160 &lt;sender2 address hash160&gt; OP_EQUALVERIFY OP_CHECKSIG amount: 300
+script: OP_DUP OP_HASH160 &lt;miner's address hash160&gt; OP_EQUALVERIFY OP_CHECKSIG amount: 50
+script: hash160(1xxATxxYptzC5a7p9obc2SLMPS148G2Qxg) OP_CHECKSTATE amount: 50
+
+So in much the same way that the AT create was handled we see that AT's "state" hash is prefixed to the UTXOs
+that here include the original 100 and the three lots of 100 sent by the "lottery" participants.
+
+Assuming that the lottery decides that "sender2" is the winner and that the fee for mining this AT is 50 then
+we see 300 being output to "sender2" (assuming that was the amount determined to be paid out) as well as then
+50 being "returned to the AT".
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

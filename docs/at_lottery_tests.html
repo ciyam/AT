@@ -1,0 +1,201 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Use Case Tests: Lottery</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Use Case Tests: Lottery</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Use Case Tests: Lottery
+-----------------------
+
+For each test the sample function data is provided and the results/output of the AT program (balance has been
+set to 1000).
+
+A summary of the tests follows:
+
+Test 1: Check that less than minimum amount is refunded. (player 1 wins)
+Test 2: Check that exact amount purchases a ticket. (player 2 wins)
+Test 3: Check that extra payment refunds difference. (player 3 wins)
+Test 4: Check all pay less. (no player wins)
+
+Test 1 (Check that less than minimum amount is refunded)
+--------------------------------------------------------
+
+Sample Function Data (Test 1):
+------------------------------
+balance 1000
+function 020 0x0000000000000000 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x0000000000013a80,0x0000000000023a80,0x0000000000093a81,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x000000000000fff0,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 027 0x0000000000000064,0x0000000000000062,0x000000000000064,0x0000000000000064 false
+function 028 0x0000000000000000 true
+
+Sample Run Output (Test 1):
+---------------------------
+
+func: 20 rc: 0000000000000000
+func1: 21 with 0 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000013a80
+func1: 27 with 100 rc: 0000000000000064
+func1: 28 with 100 rc: 0000000000000000
+func1: 23 with 100 rc: 000000000000ff00
+func1: 24 with 100 rc: 1111000000000000
+func1: 21 with 80512 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000023a80
+func1: 27 with 101 rc: 0000000000000062
+func1: 24 with 101 rc: 2222000000000000
+payout 98 to account: 2222000000000000
+func1: 21 with 146048 rc: 0000000000000066
+func1: 22 with 102 rc: 0000000000093a81
+func: 32 rc: 000000000000035f
+payout 860 to account: 1229764173248856064
+func1: 33 with 1229764173248856064 rc: 0000000000000000
+(stopped - zero balance)
+
+Test 2 (Check that exact amount purchases a ticket)
+---------------------------------------------------
+
+Sample Function Data (Test 2):
+------------------------------
+balance 1000
+function 020 0x0000000000000000 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x0000000000013a80,0x0000000000023a80,0x0000000000093a81,0x0000000000000000 false
+function 023 0x000000000000ee00,0x000000000000ff00,0x000000000000fff0,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 027 0x0000000000000064,0x0000000000000064,0x000000000000064,0x0000000000000064 false
+function 028 0x0000000000000000 true
+
+Sample Run Output
+-----------------
+
+func: 20 rc: 0000000000000000
+func1: 21 with 0 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000013a80
+func1: 27 with 100 rc: 0000000000000064
+func1: 28 with 100 rc: 0000000000000000
+func1: 23 with 100 rc: 000000000000ee00
+func1: 24 with 100 rc: 1111000000000000
+func1: 21 with 80512 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000023a80
+func1: 27 with 101 rc: 0000000000000064
+func1: 28 with 101 rc: 0000000000000000
+func1: 23 with 101 rc: 000000000000ff00
+func1: 24 with 101 rc: 2222000000000000
+func1: 21 with 146048 rc: 0000000000000066
+func1: 22 with 102 rc: 0000000000093a81
+func: 32 rc: 00000000000003be
+payout 955 to account: 2459528346497712128
+func1: 33 with 2459528346497712128 rc: 0000000000000000
+(stopped - zero balance)
+
+Test 3 (Check that extra payment refunds difference)
+----------------------------------------------------
+
+Sample Function Data (Test 3):
+------------------------------
+
+balance 1000
+function 020 0x0000000000000000 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000067,0x0000000000000000 false
+function 022 0x0000000000013a80,0x0000000000023a80,0x0000000000093a80,0x0000000000093a81,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x000000000000fff0,0x000000000000fff0,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x3344000000000000,0x0000000000000000 false
+function 027 0x0000000000000128,0x0000000000000064,0x000000000000064,0x000000000000064,0x0000000000000064 false
+function 028 0x0000000000000000 true
+
+Sample Run Output (Test 3):
+---------------------------
+
+func: 20 rc: 0000000000000000
+func1: 21 with 0 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000013a80
+func1: 27 with 100 rc: 0000000000000128
+func1: 24 with 100 rc: 1111000000000000
+payout 196 to account: 1111000000000000
+func1: 28 with 100 rc: 0000000000000000
+func1: 23 with 100 rc: 000000000000ff00
+func1: 24 with 100 rc: 1111000000000000
+func1: 21 with 80512 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000023a80
+func1: 27 with 101 rc: 0000000000000064
+func1: 28 with 101 rc: 0000000000000000
+func1: 23 with 101 rc: 000000000000ee00
+func1: 21 with 146048 rc: 0000000000000066
+func1: 22 with 102 rc: 0000000000093a80
+func1: 27 with 102 rc: 0000000000000064
+func1: 28 with 102 rc: 0000000000000000
+func1: 23 with 102 rc: 000000000000fff0
+func1: 24 with 102 rc: 3333000000000000
+func1: 21 with 604800 rc: 0000000000000067
+func1: 22 with 103 rc: 0000000000093a81
+func: 32 rc: 00000000000002e6
+payout 739 to account: 3689292519746568192
+func1: 33 with 3689292519746568192 rc: 0000000000000000
+(stopped - zero balance)
+
+Test 4 (Check all send less amount):
+-------------------------------------
+
+Sample Function Data (Test 4):
+------------------------------
+
+balance 1000
+function 020 0x0000000000000000 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x0000000000013a80,0x0000000000023a80,0x0000000000093a81,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x000000000000fff0,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 027 0x000000000000062,0x0000000000000062,0x000000000000062,0x0000000000000064 false
+function 028 0x0000000000000000 true
+
+Sample Run Output (Test 4):
+---------------------------
+
+func: 20 rc: 0000000000000000
+func1: 21 with 0 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000013a80
+func1: 27 with 100 rc: 0000000000000062
+func1: 24 with 100 rc: 1111000000000000
+payout 98 to account: 1111000000000000
+func1: 21 with 80512 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000023a80
+func1: 27 with 101 rc: 0000000000000062
+func1: 24 with 101 rc: 2222000000000000
+payout 98 to account: 2222000000000000
+func1: 21 with 146048 rc: 0000000000000066
+func1: 22 with 102 rc: 0000000000093a81
+func: 32 rc: 0000000000000300
+func1: 21 with 604801 rc: 0000000000000000
+(finished)
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

@@ -1,0 +1,230 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Use Case: Lottery</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Use Case: Lottery</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Use Case: Lottery
+-----------------
+
+A lottery where the highest ticket "value" in a given time period will be rewarded the AT's balance. A ticket
+is expected to be the hash of adding a tx id to a future block id. Minimum ticket price is set at 1 unit (and
+this can be changed via the @min_amount variable).
+
+Variables
+---------
+
+@00 ==&gt; @timestamp
+@01 ==&gt; @payout_time
+@02 ==&gt; @txid
+@03 ==&gt; @tx_time
+@04 ==&gt; @tx_info
+@05 ==&gt; @best_ticket
+@06 ==&gt; @best_account
+@07 ==&gt; @balance
+@08 ==&gt; @tx_amount
+@09 ==&gt; @min_amount
+@0a ==&gt; @target_account
+
+Functions
+---------
+
+20 (0x14) = get a time stamp value for the last block in the blockchain
+21 (0x15) = get txid for the first tx after the provided time stamp
+22 (0x16) = get a time stamp value for a given txid
+23 (0x17) = get ticket for a given txid
+24 (0x18) = get source account/address for a given txid
+27 (0x1b) = get funds amount for a given txid
+28 (0x1c) = get tx type and subtype for a given txid
+31 (0x1f) = pay given funds amount to a given account/address
+32 (0x20) = get old balance of own account
+33 (0x21) = pay old balance to a given account/address
+
+Sample Function Data
+--------------------
+
+balance 1000
+function 020 0x0000000000012345 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000067,0x0000000000000000 false
+function 022 0x00000000000a5da8,0x00000000000a5db8,0x00000000000a5dc4,0x00000000000a5dc8,0x0000000000000000 false
+function 023 0x000000000000ff00,0x000000000000ee00,0x000000000000fff0,0x000000000000ffff,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x4444000000000000,0x0000000000000000 false
+function 027 0x0000000000000064,0x0000000000000062,0x0000000000000128,0x0000000000000064,0x0000000000000000 false
+function 028 0x0000000000000000 true
+
+Sample Run Output
+-----------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 00000000000a5da8
+func1: 27 with 100 rc: 0000000000000064
+func1: 28 with 100 rc: 0000000000000000
+func1: 23 with 100 rc: 000000000000ff00
+func1: 24 with 100 rc: 1111000000000000
+func1: 21 with 679336 rc: 0000000000000065
+func1: 22 with 101 rc: 00000000000a5db8
+func1: 27 with 101 rc: 0000000000000062
+func1: 24 with 101 rc: 2222000000000000
+payout 98 to account: 2222000000000000
+func1: 21 with 679352 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc4
+func1: 27 with 102 rc: 0000000000000128
+func1: 24 with 102 rc: 3333000000000000
+payout 196 to account: 3333000000000000
+func1: 28 with 102 rc: 0000000000000000
+func1: 23 with 102 rc: 000000000000fff0
+func1: 24 with 102 rc: 3333000000000000
+func1: 21 with 679364 rc: 0000000000000067
+func1: 22 with 103 rc: 00000000000a5dc8
+func: 32 rc: 0000000000000285
+payout 642 to account: 3689292519746568192
+func1: 33 with 3689292519746568192 rc: 0000000000000000
+(stopped - zero balance)
+
+Script Assembly
+---------------
+
+if @timestamp not zero goto loop                         1e0000000039
+set @min_amount to 100 (1 unit)                          01090000006400000000000000
+get last block timestamp and put in @timestamp           35140000000000
+
+:init (0000001a)
+set @payout_time to $timestamp                           020100000000000000
+set @tx_info to (604800 seconds in a week)               0104000000803a090000000000
+add @tx_info to @payout_time                             060100000004000000
+
+:loop (00000039)
+get tx at after @timestamp and store in @txid            3615000200000000000000
+if @txid is zero finish                                  2602000000
+
+get timestamp for @txid and store in @tx_time            3616000300000002000000
+if @tx_time &gt; @payout_time goto payout                   1f030000000100000072
+
+get amount for @txid and store in @tx_amount             361b000800000002000000
+if @tx_amount == @min_amount goto continue               2308000000090000000f
+goto refund                                              1af3000000
+
+:continue (00000078)
+get tx type for @txid and store in @tx_info              361c000400000002000000
+if @tx_info is non-zero goto skip                        1e0400000035
+
+get ticket for @txid and store in @tx_info               3617000400000002000000
+if @tx_info zero finish                                  26040000007f
+
+if @tx_info &lt; @best_ticket goto skip                     2004000000050000001e
+set @best_ticket to @tx_info                             020500000004000000
+get account for @txid and put in @best_account           3618000600000002000000
+
+:skip (000000b8)
+set @timestamp to @tx_time                               020000000003000000
+goto loop                                                1a39000000
+
+:payout (000000c6)
+get old balance and store in @balance                    35200007000000
+if @balance is zero goto empty                           1b0700000018
+if @best_ticket is zero goto empty                       1b0500000012
+pay balance to @best_account                             33210006000000
+goto finish_payout                                       1a31010000
+
+:empty (000000e5)
+set @timestamp to @tx_time                               020000000003000000
+goto init                                                1a1a000000
+
+:refund (000000f3)
+get account for @tx_id and put in @target_account        3618000a00000002000000
+if @tx_amount &lt; @min_amount goto :refund_less            20080000000900000023
+subtract @min_amount from @tx_amount                     070800000009000000
+send @tx_amount to @target_account                       341f00080000000a000000
+goto continue                                            1a78000000
+
+:refund less (00000121)
+send @tx_amount to @target_account                       341f00080000000a000000
+goto skip                                                1ab8000000
+
+:finish_payout (00000131)
+set @timestamp to @payout_time                           020000000004000000
+clear @best_ticket to zero                               0305000000
+goto init                                                1a1a000000
+
+Assembly Code
+-------------
+
+00000000* BNZ $00000000 :00000039
+00000006  SET @00000009 #0000000000000064
+00000013  FUN @00000000 20
+0000001a  SET @00000001 $00000000
+00000023  SET @00000004 #0000000000093a80
+00000030  ADD @00000001 $00000004
+00000039  FUN @00000002 21 $00000000
+00000044  FIZ @00000002
+00000049  FUN @00000003 22 $00000002
+00000054  BGT $00000003 $00000001 :000000c6
+0000005e  FUN @00000008 27 $00000002
+00000069  BEQ $00000008 $00000009 :00000078
+00000073  JMP :000000f3
+00000078  FUN @00000004 28 $00000002
+00000083  BNZ $00000004 :000000b8
+00000089  FUN @00000004 23 $00000002
+00000094  FIZ @00000004
+00000099  NOP
+0000009a  BLT $00000004 $00000005 :000000b8
+000000a4  SET @00000005 $00000004
+000000ad  FUN @00000006 24 $00000002
+000000b8  SET @00000000 $00000003
+000000c1  JMP :00000039
+000000c6  FUN @00000007 32
+000000cd  BZR $00000007 :000000e5
+000000d3  BZR $00000005 :000000e5
+000000d9  FUN 33 $00000006
+000000e0  CLR @00000005
+000000e5  SET @00000000 $00000003
+000000ee  JMP :0000001a
+000000f3  FUN @0000000a 24 $00000002
+000000fe  BLT $00000008 $00000009 :0000012c
+00000108  SUB @00000008 $00000009
+00000111  FUN 31 $0000000a $00000002
+0000011c  JMP :00000078
+00000121  FUN 31 $00000008 $0000000a
+0000012c  JMP :000000b8
+
+Machine Code
+------------
+
+1e000000003901090000006400000000000000351400000000000201000000000000000104000000803a0900000000000601
+000000040000003615000200000000000000260200000036160003000000020000001f030000000100000072361b00080000
+00020000002308000000090000000f1af3000000361c0004000000020000001e040000003536170004000000020000002604
+0000007f2004000000050000001e02050000000400000036180006000000020000000200000000030000001a390000003520
+00070000001b07000000181b0500000012332100060000001a310100000200000000030000001a1a0000003618000a000000
+0200000020080000000900000023070800000009000000341f00080000000a0000001a78000000341f00080000000a000000
+1ab800000002000000000400000003050000001a1a000000
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

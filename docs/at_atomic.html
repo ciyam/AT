@@ -1,0 +1,200 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Use Case: Atomic Cross-Chain Transfer</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Use Case: Atomic Cross-Chain Transfer</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Use Case: Atomic Cross-Chain Transfer
+-------------------------------------
+
+An AT that enables an atomic cross-chain transfer to be executed by creating two separate instances of itself
+on two seperate blockchains. When constructing the first instance a 32 byte secret needs to be "hashed" using
+SHA256 and stored in the first 32 bytes of "initial data" followed by another 32 bytes for the address of the
+other party, and then the number of minutes to wait until refunding the AT's balance back to its creator.
+
+The initial creator would then wait for the other party to create a matching AT (with a significantly smaller
+number of minutes for refund). The hash values would need to be identical. Once the initiator has seen enough
+confirmations of the other AT then they will send the secret to the other AT as a message. This AT will first
+copy this message into its data storage and then check if when hashed it matches the initial data values that
+were provided when it was created. If they match then the funds are sent to the address stored in the initial
+data.
+
+Finally the creator of the second AT can now work out from checking their AT's state what the secret is. They
+would then send a message to the originally created AT instance with the same secret and it would pay them so
+the atomic cross-chain transfer will be completed.
+
+Note that if the second party never actually creates their AT then the first party just needs to wait for the
+refund to occur. Likewise once the second party has created their AT then if the first party fails to send it
+the secret on time then a refund will occur (and the first party will also be refunded). The first party will
+need to be careful not to send the secret too close to the deadline otherwise there is the possibility that a
+refund will occur in the second AT but the secret will have already been seen in the message tx.
+
+Another concern is possible attacks by "clogging the AT" up with tiny false message txs to try and prevent it
+from paying out. This is perhaps best prevented by making sure that the minimum fee for the ATs is well above
+anything that would permit such an attack to be economically beneficial.
+
+The algorithm described at https://en.bitcoin.it/wiki/Atomic_cross-chain_trading (which the Bitcointalk forum
+member TierNolan first designed) is what this AT performs (although it doesn't need multisig addresses as the
+ATs take over the role of being escrows).
+
+Variables
+---------
+
+@00 ==&gt; @hash_part1
+@01 ==&gt; @hash_part2
+@02 ==&gt; @hash_part3
+@03 ==&gt; @hash_part4
+@04 ==&gt; @address_part1
+@05 ==&gt; @address_part2
+@06 ==&gt; @address_part3
+@07 ==&gt; @address_part4
+@08 ==&gt; @refund_minutes
+@09 ==&gt; @refund_timestamp
+@0a ==&gt; @last_timestamp
+@0b ==&gt; @secret_part1
+@0c ==&gt; @secret_part2
+@0d ==&gt; @secret_part3
+@0e ==&gt; @secret_part4
+@0f ==&gt; @tx_type
+@10 ==&gt; @comparator
+@11 ==&gt; @secret_temp1
+@12 ==&gt; @secret_temp2
+@13 ==&gt; @secret_temp3
+@14 ==&gt; @secret_temp4
+
+Script Assembly
+---------------
+
+if @refund_timestamp not zero goto loop                  1e0a00000025
+set @refund_timestamp to AT creation time                35010309000000
+set @last_timestamp to @refund_timestamp                 020a00000009000000
+add @refund_minutes to @refund_timestamp                 370604090000000900000008000000
+
+:loop (0x25)
+if @last_timestamp &lt; @refund_timestamp goto :txloop      210a000000090000000f
+goto refund                                              1af7000000
+
+:txloop (0x34)
+store tx after @last_timestamp in A                      3304030a000000
+check if A is zero and store result to @comparator       35250110000000
+if @comparator is zero finish                            2610000000
+get type for tx in A and store in @tx_type               3505030f000000
+get timestamp for tx in A and store in @last_timestamp   3507030a000000
+if @tx_type is not 0 goto :check_message                 1e0f0000000b      
+goto txloop                                              1a34000000      
+
+:check_message  (0x60)
+store message of tx in A to B                            320903
+swap A and B                                             322801
+sha256 of A and store in B                               320402
+set @secret_temp1 to A1                                  35000111000000
+set @secret_temp2 to A2                                  35010112000000
+set @secret_temp3 to A3                                  35020113000000
+set @secret_temp4 to A4                                  35030114000000
+set A1 to @hash_part1                                    33100100000000
+set A2 to @hash_part2                                    33110101000000
+set A3 to @hash_part3                                    33120102000000
+set A4 to @hash_part4                                    33130103000000
+check A equals to B and store in @comparator             35270110000000
+if comparator is not 0 goto :payout                      1e100000000b
+goto :txloop                                             1a34000000
+
+:payout (0xb3)
+set @secret_part1 to $secret_temp1                       020b00000011000000
+set @secret_part2 to $secret_temp2                       020c00000012000000
+set @secret_part3 to $secret_temp3                       020d00000013000000
+set @secret_part4 to $secret_temp4                       020e00000014000000
+set B1 to @address_part1                                 33160104000000
+set B2 to @address_part2                                 33170105000000
+set B3 to @address_part3                                 33180106000000
+set B4 to @address_part4                                 33190107000000
+send all to address in B                                 320304
+finish                                                   28
+
+:refund (0xf7)
+set B to address of the AT creator                       320b03
+send remaining balance to addres in B                    320304
+finish                                                   28
+
+Assembly Code
+-------------
+
+00000000* BNZ $0000000a :00000025
+00000006  FUN @00000009 0x0301
+0000000d  SET @0000000a $00000009
+00000016  FUN @00000009 0x0406 $00000009 $00000008
+00000025  BGE $0000000a $00000009 :00000034
+0000002f  JMP :000000f7
+00000034  FUN 0x0304 $0000000a
+0000003b  FUN @00000010 0x0125
+00000042  FIZ @00000010
+00000047  FUN @0000000f 0x0305
+0000004e  FUN @0000000a 0x0307
+00000055  BNZ $0000000f :00000060
+0000005b  JMP :00000034
+00000060  FUN 0x0309
+00000063  FUN 0x0128
+00000066  FUN 0x0204
+00000069  FUN @00000011 0x0100
+00000070  FUN @00000012 0x0101
+00000077  FUN @00000013 0x0102
+0000007e  FUN @00000014 0x0103
+00000085  FUN 0x0110 $00000000
+0000008c  FUN 0x0111 $00000001
+00000093  FUN 0x0112 $00000002
+0000009a  FUN 0x0113 $00000003
+000000a1  FUN @00000010 0x0127
+000000a8  BNZ $00000010 :000000b3
+000000ae  JMP :00000034
+000000b3  SET @0000000b $00000011
+000000bc  SET @0000000c $00000012
+000000c5  SET @0000000d $00000013
+000000ce  SET @0000000e $00000014
+000000d7  FUN 0x0116 $00000004
+000000de  FUN 0x0117 $00000005
+000000e5  FUN 0x0118 $00000006
+000000ec  FUN 0x0119 $00000007
+000000f3  FUN 0x0403
+000000f6  FIN
+000000f7  FUN 0x030b
+000000fa  FUN 0x0403
+000000fd  FIN
+
+Machine Code
+------------
+
+1e0a0000002535010309000000020a00000009000000370604090000000900000008000000210a000000090000000f1af700000033040
+30a0000003525011000000026100000003505030f0000003507030a0000001e0f0000000b1a3400000032090332280132040235000111
+0000003501011200000035020113000000350301140000003310010000000033110101000000331201020000003313010300000035270
+1100000001e100000000b1a34000000020b00000011000000020c00000012000000020d00000013000000020e00000014000000331601
+0400000033170105000000331801060000003319010700000032030428320b0332030428
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

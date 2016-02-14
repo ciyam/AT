@@ -1,0 +1,99 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Test for AT instruction code 0x33 (EXT_FUN_DAT)</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Test for AT instruction code 0x33 (EXT_FUN_DAT)</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Test for AT instruction code 0x33 (EXT_FUN_DAT)
+-----------------------------------------------
+
+For each test the assembly and machine code are listed as is the data dump or expected error if test case has
+been created specifically to fail (with a data dump if any data was expected to have changed before the error
+occurred).
+
+A summary of the tests follows:
+
+Test 1 - Check function 1.
+Test 2 - Check function 2.
+Test 3 - Check function 3.
+
+Assembly Code (Test 1):
+-----------------------
+
+00000000* SET @00000001 #00000000000000ff
+0000000d  FUN 1 $00000001
+00000014  FIN
+
+Machine Code (Test 1):
+----------------------
+
+0101000000ff000000000000003301000100000028
+
+Runtime Result (Test 1):
+-----------------------
+
+255
+
+Assembly Code (Test 2):
+-----------------------
+
+00000000* SET @00000001 #00000000000000ff
+0000000d  FUN 2 $00000001
+00000014  FIN
+
+Machine Code (Test 2):
+----------------------
+
+0101000000ff000000000000003302000100000028
+
+Runtime Result (Test 2):
+-----------------------
+
+func1: 2 with 255 rc: 00000000000001fe
+
+Assembly Code (Test 3):
+-----------------------
+
+00000000* SET @00000001 #00000000000000ff
+0000000d  FUN 3 $00000001
+00000014  FIN
+
+Machine Code (Test 3):
+----------------------
+
+0101000000ff000000000000003303000100000028
+
+Runtime Result (Test 3):
+-----------------------
+
+func1: 3 with 255 rc: 000000000000007f
+
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

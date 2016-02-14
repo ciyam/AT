@@ -1,0 +1,175 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<title>CIYAM AT - Use Case: Dormant Funds Transfer</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="copyright" content="Copyright 2015 CIYAM Developers"/>
+
+<link rel="stylesheet" href="document.css" type="text/css"/>
+</head>
+
+<div id="content">
+<div id="header">
+   <div id="appname"><a href="//ciyam.org/at">AT</a></div>
+   <h3 class="right-top">Use Case: Dormant Funds Transfer</h3>
+</div>
+
+<div id="main">
+<div id="text">
+<pre>
+Use Case: Dormant Funds Transfer
+--------------------------------
+
+An AT that will transfer its funds to another account if it is not sent a tx before a given time. This can be
+used as a simple "will" to endow or donate funds when an account has become dormant.
+
+First execution will set up a timestamp in future and any later transaction sent by the AT's owner will reset
+this to the future again. If a transaction is sent to it from any other account after the payout time then it
+will transfer its balance to the "payout" account (this is initially hard-coded but can be at any time before
+payout modified by the AT's owner via the first 64 bits of an AM if AMs are supported by the host).
+
+Variables
+---------
+
+@00 ==&gt; @timestamp
+@01 ==&gt; @payout_time
+@02 ==&gt; @txid
+@03 ==&gt; @tx_time
+@04 ==&gt; @tx_info
+@05 ==&gt; @tx_source
+@06 ==&gt; @am_type_subtype
+@07 ==&gt; @payout_account
+@08 ==&gt; @zero
+
+Functions
+---------
+
+20 (0x14) = get a time stamp value for the last block in the blockchain
+21 (0x15) = get txid for the first tx after the provided time stamp
+22 (0x16) = get a time stamp value for a given txid
+24 (0x18) = get source account/address for a given txid
+26 (0x1a) = pay account balance to a given account/address
+28 (0x1c) = get tx type and subtype for a given txid
+29 (0x1d) = get the AT creator's account/address
+30 (0x1e) = get first 64 bits of AM data
+
+Sample Function Data
+--------------------
+
+function 020 0x0000000000012345 true
+function +021 0x0000000000000064,0x0000000000000065,0x0000000000000066,0x0000000000000000 false
+function 022 0x0000000000012345,0x0000000000012345,0x00000000000a5dc8,0x0000000000000000 false
+function 024 0x1111000000000000,0x2222000000000000,0x3333000000000000,0x0000000000000000 false
+function 028 0x0000000000000000,0x0000000100000002,0x0000000000000000,0x0000000000000000 false
+function 029 0x2222000000000000 true
+function 030 0x0000000000000000,0x1111111100000000,0x0000000000000000,0x0000000000000000 false
+
+Sample Run Output
+-----------------
+
+func: 20 rc: 0000000000012345
+func1: 21 with 74565 rc: 0000000000000064
+func1: 22 with 100 rc: 0000000000012345
+func1: 28 with 100 rc: 0000000000000000
+func1: 21 with 74565 rc: 0000000000000065
+func1: 22 with 101 rc: 0000000000012345
+func1: 28 with 101 rc: 0000000100000002
+func: 29 rc: 2222000000000000
+func1: 24 with 101 rc: 2222000000000000
+func2: 30 with 101 and 0 rc: 1111111100000000
+func1: 21 with 74565 rc: 0000000000000066
+func1: 22 with 102 rc: 00000000000a5dc8
+func1: 28 with 102 rc: 0000000000000000
+payout 56 to account: 1229782937960972288
+(stopped - zero balance)
+
+Script Assembly
+---------------
+
+if @timestamp not zero goto loop                         1e0000000046
+get last block timestamp and put in @timestamp           35140000000000
+set @am_type_subtype to 0x0000000100000002 (AM)          01060000000200000001000000
+set @payout account to 0x0000000011111111                01070000001111111100000000
+
+:init (00000027)
+set @payout_time to $timestamp                           020100000000000000
+set @tx_info to (604800 seconds in a week)               0104000000803a090000000000
+add @tx_info to @payout_time                             060100000004000000
+
+:loop (00000046)
+get tx at after @timestamp and store in @txid            3615000200000000000000
+if @txid is zero finish                                  2602000000
+get timestamp for @txid and store in @tx_time            3616000300000002000000
+get tx type for @txid and store in @tx_info              361c000400000002000000
+if @tx_info != @am_type_subtype goto skip                24040000000600000044
+get AT owner's account and store in @tx_info             351d0004000000
+get account for @txid and put in @tx_source              3618000500000002000000
+if @tx_info != @tx_source goto skip                      24040000000500000028
+get AM data for @txid at pos @zero and put in @tx_info   371e00040000000200000008000000
+if @tx_info zero then goto skip                          1b040000000f
+set @payout_account to @tx_info                          020700000004000000
+
+:skip (000000b0)
+if @payout_account zero goto ignore                      1b0700000010
+if @tx_time &gt; @payout_time goto payout                   1f030000000100000018
+
+:ignore (000000c0)
+set @timestamp to @tx_time                               020000000003000000
+goto init                                                1a27000000
+
+:payout (000000ce)
+pay balance to @payout_account                           331a0007000000
+finish                                                   28
+
+Assembly Code
+-------------
+
+00000000* BNZ $00000000 :00000046
+00000006  FUN @00000000 20
+0000000d  SET @00000006 #0000000100000002
+0000001a  SET @00000007 #0000000011111111
+00000027  SET @00000001 $00000000
+00000030  SET @00000004 #0000000000093a80
+0000003d  ADD @00000001 $00000004
+00000046  FUN @00000002 21 $00000000
+00000051  FIZ @00000002
+00000056  FUN @00000003 22 $00000002
+00000061  FUN @00000004 28 $00000002
+0000006c  BNE $00000004 $00000006 :000000b0
+00000076  FUN @00000004 29
+0000007d  FUN @00000005 24 $00000002
+00000088  BNE $00000004 $00000005 :000000b0
+00000092  FUN @00000004 30 $00000002 $00000008
+000000a1  BZR $00000004 :000000b0
+000000a7  SET @00000007 $00000004
+000000b0  BZR $00000007 :000000c0
+000000b6  BGT $00000003 $00000001 :000000ce
+000000c0  SET @00000000 $00000003
+000000c9  JMP :00000027
+000000ce  FUN 26 $00000007
+000000d5  FIN
+
+Machine Code
+------------
+
+1e00000000463514000000000001060000000200000001000000010700000011111111000000000201000000000000000104
+000000803a090000000000060100000004000000361500020000000000000026020000003616000300000002000000361c00
+040000000200000024040000000600000044351d0004000000361800050000000200000024040000000500000028371e0004
+00000002000000080000001b040000000f0207000000040000001b07000000101f0300000001000000180200000000030000
+001a27000000331a000700000028
+</pre>
+</div>
+</div>
+
+<div style="visibility: visible;" id="footer">
+<p>
+<div class="footer-icon"><a target="_blank" href="//ciyam.org/"><img src="logo-gryscl-128.png" /></a></div>
+&copy; 2012-2015 CIYAM Developers
+</p>
+</div>
+</body>
+
+</html>
+

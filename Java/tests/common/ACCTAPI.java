@@ -14,7 +14,7 @@ import org.ciyam.at.IllegalFunctionCodeException;
 import org.ciyam.at.MachineState;
 import org.ciyam.at.Timestamp;
 
-public class ACCTAPI implements API {
+public class ACCTAPI extends API {
 
 	private class Account {
 		public String address;
@@ -130,6 +130,7 @@ public class ACCTAPI implements API {
 	}
 
 	/** Convert long to little-endian byte array */
+	@SuppressWarnings("unused")
 	private byte[] toByteArray(long value) {
 		return new byte[] { (byte) (value), (byte) (value >> 8), (byte) (value >> 16), (byte) (value >> 24), (byte) (value >> 32), (byte) (value >> 40),
 				(byte) (value >> 48), (byte) (value >> 56) };
@@ -161,10 +162,10 @@ public class ACCTAPI implements API {
 
 	@Override
 	public void putPreviousBlockHashInA(MachineState state) {
-		state.a1 = this.blockchain.size() - 1;
-		state.a2 = state.a1;
-		state.a3 = state.a1;
-		state.a4 = state.a1;
+		this.setA1(state, this.blockchain.size() - 1);
+		this.setA2(state, state.getA1());
+		this.setA3(state, state.getA1());
+		this.setA4(state, state.getA1());
 	}
 
 	@Override
@@ -191,10 +192,10 @@ public class ACCTAPI implements API {
 				System.out.println("Found transaction at height " + blockHeight + " sequence " + transactionSequence);
 
 				// Generate pseudo-hash of transaction
-				state.a1 = new Timestamp(blockHeight, transactionSequence).longValue();
-				state.a2 = state.a1;
-				state.a3 = state.a1;
-				state.a4 = state.a1;
+				this.setA1(state, new Timestamp(blockHeight, transactionSequence).longValue());
+				this.setA2(state, state.getA1());
+				this.setA3(state, state.getA1());
+				this.setA4(state, state.getA1());
 				return;
 			}
 
@@ -202,15 +203,15 @@ public class ACCTAPI implements API {
 		}
 
 		// Nothing found
-		state.a1 = 0L;
-		state.a2 = 0L;
-		state.a3 = 0L;
-		state.a4 = 0L;
+		this.setA1(state, 0L);
+		this.setA2(state, 0L);
+		this.setA3(state, 0L);
+		this.setA4(state, 0L);
 	}
 
 	@Override
 	public long getTypeFromTransactionInA(MachineState state) {
-		Timestamp timestamp = new Timestamp(state.a1);
+		Timestamp timestamp = new Timestamp(state.getA1());
 		Block block = this.blockchain.get(timestamp.blockHeight - 1);
 		Transaction transaction = block.transactions.get(timestamp.transactionSequence);
 		return transaction.txType;
@@ -218,7 +219,7 @@ public class ACCTAPI implements API {
 
 	@Override
 	public long getAmountFromTransactionInA(MachineState state) {
-		Timestamp timestamp = new Timestamp(state.a1);
+		Timestamp timestamp = new Timestamp(state.getA1());
 		Block block = this.blockchain.get(timestamp.blockHeight - 1);
 		Transaction transaction = block.transactions.get(timestamp.transactionSequence);
 		return transaction.amount;
@@ -227,7 +228,7 @@ public class ACCTAPI implements API {
 	@Override
 	public long getTimestampFromTransactionInA(MachineState state) {
 		// Transaction hash in A is actually just 4 copies of transaction's "timestamp"
-		Timestamp timestamp = new Timestamp(state.a1);
+		Timestamp timestamp = new Timestamp(state.getA1());
 		return timestamp.longValue();
 	}
 
@@ -239,33 +240,33 @@ public class ACCTAPI implements API {
 
 	@Override
 	public void putMessageFromTransactionInAIntoB(MachineState state) {
-		Timestamp timestamp = new Timestamp(state.a1);
+		Timestamp timestamp = new Timestamp(state.getA1());
 		Block block = this.blockchain.get(timestamp.blockHeight - 1);
 		Transaction transaction = block.transactions.get(timestamp.transactionSequence);
-		state.b1 = transaction.message[0];
-		state.b2 = transaction.message[1];
-		state.b3 = transaction.message[2];
-		state.b4 = transaction.message[3];
+		this.setB1(state, transaction.message[0]);
+		this.setB2(state, transaction.message[1]);
+		this.setB3(state, transaction.message[2]);
+		this.setB4(state, transaction.message[3]);
 	}
 
 	@Override
 	public void putAddressFromTransactionInAIntoB(MachineState state) {
-		Timestamp timestamp = new Timestamp(state.a1);
+		Timestamp timestamp = new Timestamp(state.getA1());
 		Block block = this.blockchain.get(timestamp.blockHeight - 1);
 		Transaction transaction = block.transactions.get(timestamp.transactionSequence);
-		state.b1 = transaction.creator.charAt(0);
-		state.b2 = state.b1;
-		state.b3 = state.b1;
-		state.b4 = state.b1;
+		this.setB1(state, transaction.creator.charAt(0));
+		this.setB2(state, state.getB1());
+		this.setB3(state, state.getB1());
+		this.setB4(state, state.getB1());
 	}
 
 	@Override
 	public void putCreatorAddressIntoB(MachineState state) {
 		// Dummy creator
-		state.b1 = "C".charAt(0);
-		state.b2 = state.b1;
-		state.b3 = state.b1;
-		state.b4 = state.b1;
+		this.setB1(state, "C".charAt(0));
+		this.setB2(state, state.getB1());
+		this.setB3(state, state.getB1());
+		this.setB4(state, state.getB1());
 	}
 
 	@Override
@@ -280,7 +281,7 @@ public class ACCTAPI implements API {
 
 	@Override
 	public void payAmountToB(long value1, MachineState state) {
-		char firstChar = String.format("%c", state.b1).charAt(0);
+		char firstChar = String.format("%c", state.getB1()).charAt(0);
 		Account recipient = this.accounts.values().stream().filter((account) -> account.address.charAt(0) == firstChar).findFirst().get();
 		recipient.balance += value1;
 		System.out.println("Paid " + value1 + " to " + recipient.address + ", their balance now: " + recipient.balance);

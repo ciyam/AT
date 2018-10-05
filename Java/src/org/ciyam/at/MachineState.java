@@ -4,11 +4,20 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 public class MachineState {
 
 	/** Header bytes length */
 	public static final int HEADER_LENGTH = 2 + 2 + 2 + 2 + 2 + 2; // version reserved code data call-stack user-stack
+
+	/** Size of one OpCode - typically 1 byte (byte) */
+	public static final int OPCODE_SIZE = 1;
+
+	/** Size of one FunctionCode - typically 2 bytes (short) */
+	public static final int FUNCTIONCODE_SIZE = 2;
 
 	/** Size of value stored in data segment - typically 8 bytes (long) */
 	public static final int VALUE_SIZE = 8;
@@ -19,107 +28,102 @@ public class MachineState {
 	/** Maximum value for an address in the code segment */
 	public static final int MAX_CODE_ADDRESS = 0x1fffffff;
 
-	/** Bytes per code page */
-	public static final int CODE_PAGE_SIZE = 1;
+	private static class VersionedConstants {
+		/** Bytes per code page */
+		public final int CODE_PAGE_SIZE;
+		/** Bytes per data page */
+		public final int DATA_PAGE_SIZE;
+		/** Bytes per call stack page */
+		public final int CALL_STACK_PAGE_SIZE;
+		/** Bytes per user stack page */
+		public final int USER_STACK_PAGE_SIZE;
 
-	/** Bytes per data page */
-	public static final int DATA_PAGE_SIZE = VALUE_SIZE;
-
-	/** Bytes per call stack page */
-	public static final int CALL_STACK_PAGE_SIZE = ADDRESS_SIZE;
-
-	/** Bytes per user stack page */
-	public static final int USER_STACK_PAGE_SIZE = VALUE_SIZE;
-
-	/** Program Counter: offset into code to point of current execution */
-	public int programCounter;
-
-	/** Initial program counter value to use on next block after current block's execution has stopped. 0 by default */
-	public int onStopAddress;
-
-	/** Program counter value to use if an error occurs during execution. If null upon error, refund all funds to creator and finish */
-	public Integer onErrorAddress;
-
-	/** Execution for current block has stopped. Continue at current program counter on next/specific block */
-	public boolean isSleeping;
-
-	/** Block height required to wake from sleeping, or null if not in use */
-	public Integer sleepUntilHeight;
-
-	/** Execution for current block has stopped. Restart at onStopAddress on next block */
-	public boolean isStopped;
-
-	/** Execution stopped due to lack of funds for processing. Restart at onStopAddress if frozenBalance increases */
-	public boolean isFrozen;
-
-	/** Balance at which there were not enough funds, or null if not in use */
-	public Long frozenBalance;
-
-	/** Execution permanently stopped */
-	public boolean isFinished;
-
-	/** Execution permanently stopped due to fatal error */
-	public boolean hadFatalError;
-
-	// 256-bit pseudo-registers
-	public long a1;
-	public long a2;
-	public long a3;
-	public long a4;
-
-	public long b1;
-	public long b2;
-	public long b3;
-	public long b4;
-
-	public int currentBlockHeight;
-
-	/** Number of opcodes processed this execution */
-	public int steps;
-
-	public API api;
-	LoggerInterface logger;
-
-	public short version;
-	public short reserved;
-	public short numCodePages;
-	public short numDataPages;
-	public short numCallStackPages;
-	public short numUserStackPages;
-
-	public byte[] headerBytes;
-
-	public ByteBuffer codeByteBuffer;
-	public ByteBuffer dataByteBuffer;
-	public ByteBuffer callStackByteBuffer;
-	public ByteBuffer userStackByteBuffer;
-
-	private class Flags {
-		private int flags;
-
-		public Flags() {
-			flags = 0;
-		}
-
-		public Flags(int value) {
-			this.flags = value;
-		}
-
-		public void push(boolean flag) {
-			flags <<= 1;
-			flags |= flag ? 1 : 0;
-		}
-
-		public boolean pop() {
-			boolean result = (flags & 1) != 0;
-			flags >>>= 1;
-			return result;
-		}
-
-		public int intValue() {
-			return flags;
+		public VersionedConstants(int codePageSize, int dataPageSize, int callStackPageSize, int userStackPageSize) {
+			CODE_PAGE_SIZE = codePageSize;
+			DATA_PAGE_SIZE = dataPageSize;
+			CALL_STACK_PAGE_SIZE = callStackPageSize;
+			USER_STACK_PAGE_SIZE = userStackPageSize;
 		}
 	}
+
+	/** Map of constants (e.g. CODE_PAGE_SIZE) by AT version */
+	private static final Map<Short, VersionedConstants> VERSIONED_CONSTANTS = new HashMap<Short, VersionedConstants>();
+	static {
+		VERSIONED_CONSTANTS.put((short) 1, new VersionedConstants(256, 256, 256, 256));
+		VERSIONED_CONSTANTS.put((short) 3, new VersionedConstants(OPCODE_SIZE, VALUE_SIZE, ADDRESS_SIZE, VALUE_SIZE));
+	}
+
+	// Set during construction
+	public final short version;
+	public final short reserved;
+	public final short numCodePages;
+	public final short numDataPages;
+	public final short numCallStackPages;
+	public final short numUserStackPages;
+
+	private final byte[] headerBytes;
+
+	/** Constants set in effect */
+	private final VersionedConstants constants;
+
+	/** Program Counter: offset into code to point of current execution */
+	private int programCounter;
+
+	/** Initial program counter value to use on next block after current block's execution has stopped. 0 by default */
+	private int onStopAddress;
+
+	/** Program counter value to use if an error occurs during execution. If null upon error, refund all funds to creator and finish */
+	private Integer onErrorAddress;
+
+	/** Execution for current block has stopped. Continue at current program counter on next/specific block */
+	private boolean isSleeping;
+
+	/** Block height required to wake from sleeping, or null if not in use */
+	private Integer sleepUntilHeight;
+
+	/** Execution for current block has stopped. Restart at onStopAddress on next block */
+	private boolean isStopped;
+
+	/** Execution stopped due to lack of funds for processing. Restart at onStopAddress if frozenBalance increases */
+	private boolean isFrozen;
+
+	/** Balance at which there were not enough funds, or null if not in use */
+	private Long frozenBalance;
+
+	/** Execution permanently stopped */
+	private boolean isFinished;
+
+	/** Execution permanently stopped due to fatal error */
+	private boolean hadFatalError;
+
+	// 256-bit pseudo-registers
+	// NOTE: These are package-scope to allow easy access/operations in FunctionCodes.
+	// Outside classes (e.g. unit tests) can use getters
+	/* package */ long a1;
+	/* package */ long a2;
+	/* package */ long a3;
+	/* package */ long a4;
+
+	/* package */ long b1;
+	/* package */ long b2;
+	/* package */ long b3;
+	/* package */ long b4;
+
+	private int currentBlockHeight;
+
+	/** Number of opcodes processed this execution */
+	private int steps;
+
+	private API api;
+	private LoggerInterface logger;
+
+	// NOTE: These are package-scope to allow easy access/operations in Opcode/FunctionCode.
+	/* package */ ByteBuffer codeByteBuffer;
+	/* package */ ByteBuffer dataByteBuffer;
+	/* package */ ByteBuffer callStackByteBuffer;
+	/* package */ ByteBuffer userStackByteBuffer;
+
+	// Constructors
 
 	/** For internal use when recreating a machine state */
 	private MachineState(API api, LoggerInterface logger, byte[] headerBytes) {
@@ -127,53 +131,232 @@ public class MachineState {
 			throw new IllegalArgumentException("headerBytes length " + headerBytes.length + " incorrect, expected " + HEADER_LENGTH);
 
 		this.headerBytes = headerBytes;
-		parseHeader();
 
-		this.codeByteBuffer = ByteBuffer.allocate(this.numCodePages * CODE_PAGE_SIZE).order(ByteOrder.LITTLE_ENDIAN);
+		// Parsing header bytes
+		ByteBuffer byteBuffer = ByteBuffer.wrap(this.headerBytes);
+		byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
 
-		this.dataByteBuffer = ByteBuffer.allocate(this.numDataPages * DATA_PAGE_SIZE).order(ByteOrder.LITTLE_ENDIAN);
+		this.version = byteBuffer.getShort();
+		if (this.version < 1)
+			throw new IllegalArgumentException("Version must be >= 0");
 
-		this.callStackByteBuffer = ByteBuffer.allocate(this.numCallStackPages * CALL_STACK_PAGE_SIZE).order(ByteOrder.LITTLE_ENDIAN);
+		this.constants = VERSIONED_CONSTANTS.get(this.version);
+		if (this.constants == null)
+			throw new IllegalArgumentException("Version " + this.version + " unsupported");
+
+		this.reserved = byteBuffer.getShort();
+
+		this.numCodePages = byteBuffer.getShort();
+		if (this.numCodePages < 1)
+			throw new IllegalArgumentException("Number of code pages must be > 0");
+
+		this.numDataPages = byteBuffer.getShort();
+		if (this.numDataPages < 1)
+			throw new IllegalArgumentException("Number of data pages must be > 0");
+
+		this.numCallStackPages = byteBuffer.getShort();
+		if (this.numCallStackPages < 0)
+			throw new IllegalArgumentException("Number of call stack pages must be >= 0");
+
+		this.numUserStackPages = byteBuffer.getShort();
+		if (this.numUserStackPages < 0)
+			throw new IllegalArgumentException("Number of user stack pages must be >= 0");
+
+		// Header OK - set up code and data buffers
+		this.codeByteBuffer = ByteBuffer.allocate(this.numCodePages * this.constants.CODE_PAGE_SIZE).order(ByteOrder.LITTLE_ENDIAN);
+		this.dataByteBuffer = ByteBuffer.allocate(this.numDataPages * this.constants.DATA_PAGE_SIZE).order(ByteOrder.LITTLE_ENDIAN);
+
+		// Set up stacks
+		this.callStackByteBuffer = ByteBuffer.allocate(this.numCallStackPages * this.constants.CALL_STACK_PAGE_SIZE).order(ByteOrder.LITTLE_ENDIAN);
 		this.callStackByteBuffer.position(this.callStackByteBuffer.limit()); // Downward-growing stack, so start at the end
 
-		this.userStackByteBuffer = ByteBuffer.allocate(this.numUserStackPages * USER_STACK_PAGE_SIZE).order(ByteOrder.LITTLE_ENDIAN);
+		this.userStackByteBuffer = ByteBuffer.allocate(this.numUserStackPages * this.constants.USER_STACK_PAGE_SIZE).order(ByteOrder.LITTLE_ENDIAN);
 		this.userStackByteBuffer.position(this.userStackByteBuffer.limit()); // Downward-growing stack, so start at the end
 
 		this.api = api;
-		this.currentBlockHeight = api.getCurrentBlockHeight();
+		this.currentBlockHeight = 0;
 		this.steps = 0;
 		this.logger = logger;
+	}
+
+	/** For creating a new machine state */
+	public MachineState(byte[] creationBytes) {
+		this(null, null, Arrays.copyOfRange(creationBytes, 0, HEADER_LENGTH));
+
+		int expectedLength = HEADER_LENGTH + this.numCodePages * this.constants.CODE_PAGE_SIZE + this.numDataPages + this.constants.DATA_PAGE_SIZE;
+		if (creationBytes.length != expectedLength)
+			throw new IllegalArgumentException("Creation bytes length does not match header values");
+
+		System.arraycopy(creationBytes, HEADER_LENGTH, this.codeByteBuffer.array(), 0, this.numCodePages * this.constants.CODE_PAGE_SIZE);
+
+		System.arraycopy(creationBytes, HEADER_LENGTH + this.numCodePages * this.constants.CODE_PAGE_SIZE, this.dataByteBuffer.array(), 0,
+				this.numDataPages + this.constants.DATA_PAGE_SIZE);
+
+		commonFinalConstruction();
 	}
 
 	/** For creating a new machine state */
 	public MachineState(API api, LoggerInterface logger, byte[] headerBytes, byte[] codeBytes, byte[] dataBytes) {
 		this(api, logger, headerBytes);
 
-		// XXX: Why don't we simply ByteBuffer.wrap(codeBytes) as they're read-only?
-		// This would do away with the need to specify numCodePages, save space and provide automatic end-of-code detection during execution thanks to
-		// ByteBuffer's BufferUnderflowException
-
-		if (codeBytes.length > this.numCodePages * CODE_PAGE_SIZE)
+		if (codeBytes.length > this.numCodePages * this.constants.CODE_PAGE_SIZE)
 			throw new IllegalArgumentException("Number of code pages too small to hold code bytes");
 
-		if (dataBytes.length > this.numDataPages * DATA_PAGE_SIZE)
+		if (dataBytes.length > this.numDataPages * this.constants.DATA_PAGE_SIZE)
 			throw new IllegalArgumentException("Number of data pages too small to hold data bytes");
 
 		System.arraycopy(codeBytes, 0, this.codeByteBuffer.array(), 0, codeBytes.length);
 
 		System.arraycopy(dataBytes, 0, this.dataByteBuffer.array(), 0, dataBytes.length);
 
+		commonFinalConstruction();
+	}
+
+	private void commonFinalConstruction() {
 		this.programCounter = 0;
 		this.onStopAddress = 0;
 		this.onErrorAddress = null;
 		this.isSleeping = false;
 		this.sleepUntilHeight = null;
 		this.isStopped = false;
-		this.isFinished = false;
-		this.hadFatalError = false;
 		this.isFrozen = false;
 		this.frozenBalance = null;
+		this.isFinished = false;
+		this.hadFatalError = false;
 	}
+
+	// Getters / setters
+
+	// NOTE: Many setters have package-scope (i.e. org.ciyam.at only) to allow changes
+	// during execution but not by outside classes.
+
+	public int getProgramCounter() {
+		return this.programCounter;
+	}
+
+	public int getOnStopAddress() {
+		return this.onStopAddress;
+	}
+
+	/* package */ void setOnStopAddress(int address) {
+		this.onStopAddress = address;
+	}
+
+	public Integer getOnErrorAddress() {
+		return this.onErrorAddress;
+	}
+
+	/* package */ void setOnErrorAddress(Integer address) {
+		this.onErrorAddress = address;
+	}
+
+	public boolean getIsSleeping() {
+		return this.isSleeping;
+	}
+
+	/* package */ void setIsSleeping(boolean isSleeping) {
+		this.isSleeping = isSleeping;
+	}
+
+	public Integer getSleepUntilHeight() {
+		return this.sleepUntilHeight;
+	}
+
+	/* package */ void setSleepUntilHeight(Integer address) {
+		this.sleepUntilHeight = address;
+	}
+
+	public boolean getIsStopped() {
+		return this.isStopped;
+	}
+
+	/* package */ void setIsStopped(boolean isStopped) {
+		this.isStopped = isStopped;
+	}
+
+	public boolean getIsFrozen() {
+		return this.isFrozen;
+	}
+
+	/* package */ void setIsFrozen(boolean isFrozen) {
+		this.isFrozen = isFrozen;
+	}
+
+	public Long getFrozenBalance() {
+		return this.frozenBalance;
+	}
+
+	/* package */ void setFrozenBalance(Long frozenBalance) {
+		this.frozenBalance = frozenBalance;
+	}
+
+	public boolean getIsFinished() {
+		return this.isFinished;
+	}
+
+	/* package */ void setIsFinished(boolean isFinished) {
+		this.isFinished = isFinished;
+	}
+
+	public boolean getHadFatalError() {
+		return this.hadFatalError;
+	}
+
+	/* package */ void setHadFatalError(boolean hadFatalError) {
+		this.hadFatalError = hadFatalError;
+	}
+
+	// No corresponding setters due to package-scope - see above
+	public long getA1() {
+		return this.a1;
+	}
+
+	public long getA2() {
+		return this.a2;
+	}
+
+	public long getA3() {
+		return this.a3;
+	}
+
+	public long getA4() {
+		return this.a4;
+	}
+
+	public long getB1() {
+		return this.b1;
+	}
+
+	public long getB2() {
+		return this.b2;
+	}
+
+	public long getB3() {
+		return this.b3;
+	}
+
+	public long getB4() {
+		return this.b4;
+	}
+	// End of package-scope pseudo-registers
+
+	public int getCurrentBlockHeight() {
+		return this.currentBlockHeight;
+	}
+
+	public int getSteps() {
+		return this.steps;
+	}
+
+	public API getAPI() {
+		return this.api;
+	}
+
+	public LoggerInterface getLogger() {
+		return this.logger;
+	}
+
+	// Serialization
 
 	/** For serializing a machine state */
 	public byte[] toBytes() {
@@ -192,13 +375,13 @@ public class MachineState {
 			// Call stack length (32bit unsigned int)
 			int callStackLength = this.callStackByteBuffer.limit() - this.callStackByteBuffer.position();
 			bytes.write(toByteArray(callStackLength));
-			// Call stack
+			// Call stack (only the bytes actually in use)
 			bytes.write(this.callStackByteBuffer.array(), this.callStackByteBuffer.position(), callStackLength);
 
 			// User stack length (32bit unsigned int)
 			int userStackLength = this.userStackByteBuffer.limit() - this.userStackByteBuffer.position();
 			bytes.write(toByteArray(userStackLength));
-			// User stack
+			// User stack (only the bytes actually in use)
 			bytes.write(this.userStackByteBuffer.array(), this.userStackByteBuffer.position(), userStackLength);
 
 			// Actual state
@@ -333,6 +516,34 @@ public class MachineState {
 		return state;
 	}
 
+	/** Class for pushing/popping boolean flags onto/from an int */
+	private class Flags {
+		private int flags;
+
+		public Flags() {
+			flags = 0;
+		}
+
+		public Flags(int value) {
+			this.flags = value;
+		}
+
+		public void push(boolean flag) {
+			flags <<= 1;
+			flags |= flag ? 1 : 0;
+		}
+
+		public boolean pop() {
+			boolean result = (flags & 1) != 0;
+			flags >>>= 1;
+			return result;
+		}
+
+		public int intValue() {
+			return flags;
+		}
+	}
+
 	/** Convert int to little-endian byte array */
 	private byte[] toByteArray(int value) {
 		return new byte[] { (byte) (value), (byte) (value >> 8), (byte) (value >> 16), (byte) (value >> 24) };
@@ -344,32 +555,7 @@ public class MachineState {
 				(byte) (value >> 48), (byte) (value >> 56) };
 	}
 
-	private void parseHeader() {
-		ByteBuffer byteBuffer = ByteBuffer.wrap(this.headerBytes);
-		byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
-
-		this.version = byteBuffer.getShort();
-		if (this.version < 1)
-			throw new IllegalArgumentException("Version must be >= 0");
-
-		this.reserved = byteBuffer.getShort();
-
-		this.numCodePages = byteBuffer.getShort();
-		if (this.numCodePages < 1)
-			throw new IllegalArgumentException("Number of code pages must be > 0");
-
-		this.numDataPages = byteBuffer.getShort();
-		if (this.numDataPages < 1)
-			throw new IllegalArgumentException("Number of data pages must be > 0");
-
-		this.numCallStackPages = byteBuffer.getShort();
-		if (this.numCallStackPages < 0)
-			throw new IllegalArgumentException("Number of call stack pages must be >= 0");
-
-		this.numUserStackPages = byteBuffer.getShort();
-		if (this.numUserStackPages < 0)
-			throw new IllegalArgumentException("Number of user stack pages must be >= 0");
-	}
+	// Actual execution
 
 	public void execute() {
 		// Set byte buffer position using program counter
@@ -382,6 +568,7 @@ public class MachineState {
 		this.isFrozen = false;
 		this.frozenBalance = null;
 		this.steps = 0;
+		this.currentBlockHeight = api.getCurrentBlockHeight();
 
 		while (!this.isSleeping && !this.isStopped && !this.isFinished && !this.isFrozen) {
 			byte rawOpCode = codeByteBuffer.get();
@@ -393,7 +580,12 @@ public class MachineState {
 
 				this.logger.debug("[PC: " + String.format("%04x", this.programCounter) + "] " + nextOpCode.name());
 
-				nextOpCode.execute(codeByteBuffer, dataByteBuffer, userStackByteBuffer, callStackByteBuffer, this);
+				// TODO: Request cost from API, apply cost to balance, etc.
+
+				// At this point, programCounter is BEFORE opcode (and args).
+				nextOpCode.execute(this);
+
+				// Synchronize programCounter with codeByteBuffer in case of JMPs, branches, etc.
 				this.programCounter = codeByteBuffer.position();
 			} catch (ExecutionException e) {
 				this.logger.debug("Error at PC " + String.format("%04x", this.programCounter) + ": " + e.getMessage());
@@ -401,6 +593,8 @@ public class MachineState {
 				if (this.onErrorAddress == null) {
 					this.isFinished = true;
 					this.hadFatalError = true;
+
+					// Ask API to refund remaining funds back to AT's creator
 					this.api.onFatalError(this, e);
 					break;
 				}
@@ -418,7 +612,7 @@ public class MachineState {
 		}
 	}
 
-	// public String disassemble(List<String> dataLabels, Map<Integer, String> codeLabels) {
+	/** Return disassembly of code bytes */
 	public String disassemble() throws ExecutionException {
 		String output = "";
 

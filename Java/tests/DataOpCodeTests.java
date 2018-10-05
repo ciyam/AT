@@ -1,98 +1,23 @@
-import static common.TestUtils.hexToBytes;
 import static org.junit.Assert.*;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.security.Security;
-
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.ciyam.at.API;
 import org.ciyam.at.ExecutionException;
-import org.ciyam.at.MachineState;
 import org.ciyam.at.OpCode;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-import common.TestAPI;
-import common.TestLogger;
+import common.ExecutableTest;
 
-public class DataOpCodeTests {
-
-	public TestLogger logger;
-	public API api;
-	public MachineState state;
-	public ByteBuffer codeByteBuffer;
-
-	@BeforeClass
-	public static void beforeClass() {
-		Security.insertProviderAt(new BouncyCastleProvider(), 0);
-	}
-
-	@Before
-	public void beforeTest() {
-		logger = new TestLogger();
-		api = new TestAPI();
-		codeByteBuffer = ByteBuffer.allocate(512).order(ByteOrder.LITTLE_ENDIAN);
-	}
-
-	@After
-	public void afterTest() {
-		codeByteBuffer = null;
-		api = null;
-		logger = null;
-	}
-
-	private void execute() {
-		System.out.println("Starting execution:");
-		System.out.println("Current block height: " + state.currentBlockHeight);
-
-		state.execute();
-
-		System.out.println("After execution:");
-		System.out.println("Steps: " + state.steps);
-		System.out.println("Program Counter: " + String.format("%04x", state.programCounter));
-		System.out.println("Stop Address: " + String.format("%04x", state.onStopAddress));
-		System.out.println("Error Address: " + (state.onErrorAddress == null ? "not set" : String.format("%04x", state.onErrorAddress)));
-		if (state.isSleeping)
-			System.out.println("Sleeping until current block height (" + state.currentBlockHeight + ") reaches " + state.sleepUntilHeight);
-		else
-			System.out.println("Sleeping: " + state.isSleeping);
-		System.out.println("Stopped: " + state.isStopped);
-		System.out.println("Finished: " + state.isFinished);
-		if (state.hadFatalError)
-			System.out.println("Finished due to fatal error!");
-		System.out.println("Frozen: " + state.isFrozen);
-	}
-
-	private void simulate() {
-		// version 0003, reserved 0000, code 0200 * 1, data 0020 * 8, call stack 0010 * 4, user stack 0010 * 8
-		byte[] headerBytes = hexToBytes("0300" + "0000" + "0002" + "2000" + "1000" + "1000");
-		byte[] codeBytes = codeByteBuffer.array();
-		byte[] dataBytes = new byte[0];
-
-		state = new MachineState(api, logger, headerBytes, codeBytes, dataBytes);
-
-		do {
-			execute();
-
-			// Bump block height
-			state.currentBlockHeight++;
-		} while (!state.isFinished);
-
-	}
+public class DataOpCodeTests extends ExecutableTest {
 
 	@Test
 	public void testSET_VAL() throws ExecutionException {
 		codeByteBuffer.put(OpCode.SET_VAL.value).putInt(2).putLong(2222L);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 2222L, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 2222L, getData(2));
 	}
 
 	@Test
@@ -100,10 +25,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_VAL.value).putInt(9999).putLong(2222L);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -112,11 +37,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_DAT.value).putInt(1).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 2222L, state.dataByteBuffer.getLong(1 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 2222L, getData(1));
 	}
 
 	@Test
@@ -124,10 +49,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_DAT.value).putInt(9999).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -135,10 +60,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_DAT.value).putInt(1).putInt(9999);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -147,15 +72,14 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.CLR_DAT.value).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
 
 		// Check data all zero
-		state.dataByteBuffer.position(0);
-		while (state.dataByteBuffer.hasRemaining())
-			assertEquals((byte) 0, state.dataByteBuffer.get());
+		for (int i = 0; i < 0x0020; ++i)
+			assertEquals(0L, getData(i));
 	}
 
 	@Test
@@ -163,10 +87,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.CLR_DAT.value).putInt(9999);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -175,11 +99,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.INC_DAT.value).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 2222L + 1L, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 2222L + 1L, getData(2));
 	}
 
 	@Test
@@ -187,10 +111,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.INC_DAT.value).putInt(9999);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -199,11 +123,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.INC_DAT.value).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 0L, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 0L, getData(2));
 	}
 
 	@Test
@@ -212,11 +136,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.DEC_DAT.value).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 2222L - 1L, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 2222L - 1L, getData(2));
 	}
 
 	@Test
@@ -224,9 +148,9 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.DEC_DAT.value).putInt(9999);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		execute(true);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -235,11 +159,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.DEC_DAT.value).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 0xffffffffffffffffL, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 0xffffffffffffffffL, getData(2));
 	}
 
 	@Test
@@ -249,11 +173,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.ADD_DAT.value).putInt(2).putInt(3);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 2222L + 3333L, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 2222L + 3333L, getData(2));
 	}
 
 	@Test
@@ -261,10 +185,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.ADD_DAT.value).putInt(9999).putInt(3);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -272,10 +196,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.ADD_DAT.value).putInt(2).putInt(9999);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -285,11 +209,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.ADD_DAT.value).putInt(2).putInt(3);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 0x0000000000000098L, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 0x0000000000000098L, getData(2));
 	}
 
 	@Test
@@ -299,11 +223,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SUB_DAT.value).putInt(3).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 3333L - 2222L, state.dataByteBuffer.getLong(3 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 3333L - 2222L, getData(3));
 	}
 
 	@Test
@@ -313,11 +237,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.MUL_DAT.value).putInt(3).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", (3333L * 2222L), state.dataByteBuffer.getLong(3 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", (3333L * 2222L), getData(3));
 	}
 
 	@Test
@@ -329,11 +253,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.DIV_DAT.value).putInt(3).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", (3333L / 2222L), state.dataByteBuffer.getLong(3 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", (3333L / 2222L), getData(3));
 	}
 
 	@Test
@@ -354,11 +278,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_VAL.value).putInt(1).putLong(1L);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Error flag not set", 1L, state.dataByteBuffer.getLong(1 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Error flag not set", 1L, getData(1));
 	}
 
 	@Test
@@ -368,11 +292,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.BOR_DAT.value).putInt(3).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", (3333L | 2222L), state.dataByteBuffer.getLong(3 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", (3333L | 2222L), getData(3));
 	}
 
 	@Test
@@ -382,11 +306,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.AND_DAT.value).putInt(3).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", (3333L & 2222L), state.dataByteBuffer.getLong(3 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", (3333L & 2222L), getData(3));
 	}
 
 	@Test
@@ -396,11 +320,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.XOR_DAT.value).putInt(3).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", (3333L ^ 2222L), state.dataByteBuffer.getLong(3 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", (3333L ^ 2222L), getData(3));
 	}
 
 	@Test
@@ -409,11 +333,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.NOT_DAT.value).putInt(2);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", ~2222L, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", ~2222L, getData(2));
 	}
 
 	@Test
@@ -428,11 +352,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_IND.value).putInt(6).putInt(0);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 3333L, state.dataByteBuffer.getLong(6 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 3333L, getData(6));
 	}
 
 	@Test
@@ -447,10 +371,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_IND.value).putInt(6).putInt(9999);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -465,10 +389,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_IND.value).putInt(6).putInt(0);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -484,11 +408,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_IDX.value).putInt(0).putInt(6).putInt(7);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 4444L, state.dataByteBuffer.getLong(0 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 4444L, getData(0));
 	}
 
 	@Test
@@ -504,10 +428,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_IDX.value).putInt(0).putInt(9999).putInt(7);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -523,10 +447,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_IDX.value).putInt(0).putInt(6).putInt(7);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -542,10 +466,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_IDX.value).putInt(0).putInt(6).putInt(7);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -561,10 +485,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_IDX.value).putInt(0).putInt(6).putInt(9999);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -579,11 +503,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.IND_DAT.value).putInt(0).putInt(5);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 5555L, state.dataByteBuffer.getLong(3 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 5555L, getData(3));
 	}
 
 	@Test
@@ -598,10 +522,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_IND.value).putInt(9999).putInt(5);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -616,10 +540,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_IND.value).putInt(0).putInt(5);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -635,11 +559,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.IDX_DAT.value).putInt(6).putInt(7).putInt(5);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 5555L, state.dataByteBuffer.getLong(4 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 5555L, getData(4));
 	}
 
 	@Test
@@ -655,10 +579,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.IDX_DAT.value).putInt(9999).putInt(7).putInt(5);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -674,10 +598,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.IDX_DAT.value).putInt(6).putInt(7).putInt(5);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -693,10 +617,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.IDX_DAT.value).putInt(6).putInt(7).putInt(5);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -712,10 +636,10 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.IDX_DAT.value).putInt(6).putInt(9999).putInt(5);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -725,11 +649,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.MOD_DAT.value).putInt(2).putInt(3);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 2222L % 3333L, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 2222L % 3333L, getData(2));
 	}
 
 	@Test
@@ -750,11 +674,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SET_VAL.value).putInt(1).putLong(1L);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Error flag not set", 1L, state.dataByteBuffer.getLong(1 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Error flag not set", 1L, getData(1));
 	}
 
 	@Test
@@ -764,11 +688,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SHL_DAT.value).putInt(2).putInt(3);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 2222L << 3, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 2222L << 3, getData(2));
 	}
 
 	@Test
@@ -778,11 +702,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SHL_DAT.value).putInt(2).putInt(3);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 0L, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 0L, getData(2));
 	}
 
 	@Test
@@ -792,11 +716,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SHR_DAT.value).putInt(2).putInt(3);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 2222L >> 3, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 2222L >> 3, getData(2));
 	}
 
 	@Test
@@ -806,11 +730,11 @@ public class DataOpCodeTests {
 		codeByteBuffer.put(OpCode.SHR_DAT.value).putInt(2).putInt(3);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("Data does not match", 0L, state.dataByteBuffer.getLong(2 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("Data does not match", 0L, getData(2));
 	}
 
 }

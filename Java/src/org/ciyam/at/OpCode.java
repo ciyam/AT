@@ -2,7 +2,9 @@ package org.ciyam.at;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -26,7 +28,7 @@ import java.util.stream.Collectors;
  * <tt>$($addr1 + $addr2)</tt> means "fetch from address fetched from <tt>addr1</tt> plus offset fetched from <tt>addr2</tt>", i.e. indirect indexed
  * 
  * @see OpCode#valueOf(int)
- * @see OpCode#execute(ByteBuffer, ByteBuffer, ByteBuffer, ByteBuffer, MachineState)
+ * @see OpCode#executeWithParams(MachineState, Object...)
  */
 public enum OpCode {
 
@@ -37,8 +39,7 @@ public enum OpCode {
 	 */
 	NOP(0x7f) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) {
+		public void executeWithParams(MachineState state, Object... args) {
 			// Do nothing
 		}
 	},
@@ -49,11 +50,11 @@ public enum OpCode {
 	 */
 	SET_VAL(0x01, OpCodeParam.DEST_ADDR, OpCodeParam.VALUE) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			long value = Utils.getCodeValue(codeByteBuffer);
-			dataByteBuffer.putLong(address, value);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
+			long value = (long) args[1];
+
+			state.dataByteBuffer.putLong(address, value);
 		}
 	},
 	/**
@@ -63,12 +64,12 @@ public enum OpCode {
 	 */
 	SET_DAT(0x02, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address1 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			int address2 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			long value = dataByteBuffer.getLong(address2);
-			dataByteBuffer.putLong(address1, value);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address1 = (int) args[0];
+			int address2 = (int) args[1];
+
+			long value = state.dataByteBuffer.getLong(address2);
+			state.dataByteBuffer.putLong(address1, value);
 		}
 	},
 	/**
@@ -78,10 +79,10 @@ public enum OpCode {
 	 */
 	CLR_DAT(0x03, OpCodeParam.DEST_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			dataByteBuffer.putLong(address, 0L);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
+
+			state.dataByteBuffer.putLong(address, 0L);
 		}
 	},
 	/**
@@ -91,11 +92,11 @@ public enum OpCode {
 	 */
 	INC_DAT(0x04, OpCodeParam.DEST_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			long value = dataByteBuffer.getLong(address);
-			dataByteBuffer.putLong(address, value + 1);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
+
+			long value = state.dataByteBuffer.getLong(address);
+			state.dataByteBuffer.putLong(address, value + 1);
 		}
 	},
 	/**
@@ -105,11 +106,11 @@ public enum OpCode {
 	 */
 	DEC_DAT(0x05, OpCodeParam.DEST_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			long value = dataByteBuffer.getLong(address);
-			dataByteBuffer.putLong(address, value - 1);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
+
+			long value = state.dataByteBuffer.getLong(address);
+			state.dataByteBuffer.putLong(address, value - 1);
 		}
 	},
 	/**
@@ -119,9 +120,8 @@ public enum OpCode {
 	 */
 	ADD_DAT(0x06, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeDataOperation(codeByteBuffer, dataByteBuffer, (a, b) -> a + b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeDataOperation(state, (a, b) -> a + b, args);
 		}
 	},
 	/**
@@ -131,9 +131,8 @@ public enum OpCode {
 	 */
 	SUB_DAT(0x07, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeDataOperation(codeByteBuffer, dataByteBuffer, (a, b) -> a - b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeDataOperation(state, (a, b) -> a - b, args);
 		}
 	},
 	/**
@@ -143,9 +142,8 @@ public enum OpCode {
 	 */
 	MUL_DAT(0x08, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeDataOperation(codeByteBuffer, dataByteBuffer, (a, b) -> a * b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeDataOperation(state, (a, b) -> a * b, args);
 		}
 	},
 	/**
@@ -156,10 +154,9 @@ public enum OpCode {
 	 */
 	DIV_DAT(0x09, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
 			try {
-				executeDataOperation(codeByteBuffer, dataByteBuffer, (a, b) -> a / b);
+				executeDataOperation(state, (a, b) -> a / b, args);
 			} catch (ArithmeticException e) {
 				throw new IllegalOperationException("Divide by zero", e);
 			}
@@ -172,9 +169,8 @@ public enum OpCode {
 	 */
 	BOR_DAT(0x0a, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeDataOperation(codeByteBuffer, dataByteBuffer, (a, b) -> a | b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeDataOperation(state, (a, b) -> a | b, args);
 		}
 	},
 	/**
@@ -184,9 +180,8 @@ public enum OpCode {
 	 */
 	AND_DAT(0x0b, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeDataOperation(codeByteBuffer, dataByteBuffer, (a, b) -> a & b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeDataOperation(state, (a, b) -> a & b, args);
 		}
 	},
 	/**
@@ -196,9 +191,8 @@ public enum OpCode {
 	 */
 	XOR_DAT(0x0c, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeDataOperation(codeByteBuffer, dataByteBuffer, (a, b) -> a ^ b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeDataOperation(state, (a, b) -> a ^ b, args);
 		}
 	},
 	/**
@@ -208,11 +202,11 @@ public enum OpCode {
 	 */
 	NOT_DAT(0x0d, OpCodeParam.DEST_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			long value = dataByteBuffer.getLong(address);
-			dataByteBuffer.putLong(address, ~value);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
+
+			long value = state.dataByteBuffer.getLong(address);
+			state.dataByteBuffer.putLong(address, ~value);
 		}
 	},
 	/**
@@ -222,18 +216,17 @@ public enum OpCode {
 	 */
 	SET_IND(0x0e, OpCodeParam.DEST_ADDR, OpCodeParam.INDIRECT_SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address1 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			int address2 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address1 = (int) args[0];
+			int address2 = (int) args[1];
 
-			long address3 = dataByteBuffer.getLong(address2) * MachineState.VALUE_SIZE;
+			long address3 = state.dataByteBuffer.getLong(address2) * MachineState.VALUE_SIZE;
 
-			if (address3 < 0 || address3 + MachineState.VALUE_SIZE >= dataByteBuffer.limit())
+			if (address3 < 0 || address3 + MachineState.VALUE_SIZE >= state.dataByteBuffer.limit())
 				throw new InvalidAddressException("Data address out of bounds");
 
-			long value = dataByteBuffer.getLong((int) address3);
-			dataByteBuffer.putLong(address1, value);
+			long value = state.dataByteBuffer.getLong((int) address3);
+			state.dataByteBuffer.putLong(address1, value);
 		}
 	},
 	/**
@@ -243,22 +236,21 @@ public enum OpCode {
 	 */
 	SET_IDX(0x0f, OpCodeParam.DEST_ADDR, OpCodeParam.INDIRECT_SRC_ADDR_WITH_INDEX, OpCodeParam.INDEX) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address1 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			int address2 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			int address3 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address1 = (int) args[0];
+			int address2 = (int) args[1];
+			int address3 = (int) args[2];
 
-			long baseAddress = dataByteBuffer.getLong(address2) * MachineState.VALUE_SIZE;
-			long offset = dataByteBuffer.getLong(address3) * MachineState.VALUE_SIZE;
+			long baseAddress = state.dataByteBuffer.getLong(address2) * MachineState.VALUE_SIZE;
+			long offset = state.dataByteBuffer.getLong(address3) * MachineState.VALUE_SIZE;
 
 			long newAddress = baseAddress + offset;
 
-			if (newAddress < 0 || newAddress + MachineState.VALUE_SIZE >= dataByteBuffer.limit())
+			if (newAddress < 0 || newAddress + MachineState.VALUE_SIZE >= state.dataByteBuffer.limit())
 				throw new InvalidAddressException("Data address out of bounds");
 
-			long value = dataByteBuffer.getLong((int) newAddress);
-			dataByteBuffer.putLong(address1, value);
+			long value = state.dataByteBuffer.getLong((int) newAddress);
+			state.dataByteBuffer.putLong(address1, value);
 		}
 	},
 	/**
@@ -269,16 +261,16 @@ public enum OpCode {
 	 */
 	PSH_DAT(0x10, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			long value = dataByteBuffer.getLong(address);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
+
+			long value = state.dataByteBuffer.getLong(address);
 
 			try {
 				// Simulate backwards-walking stack
-				int newPosition = userStackByteBuffer.position() - MachineState.VALUE_SIZE;
-				userStackByteBuffer.putLong(newPosition, value);
-				userStackByteBuffer.position(newPosition);
+				int newPosition = state.userStackByteBuffer.position() - MachineState.VALUE_SIZE;
+				state.userStackByteBuffer.putLong(newPosition, value);
+				state.userStackByteBuffer.position(newPosition);
 			} catch (IndexOutOfBoundsException | IllegalArgumentException e) {
 				throw new StackBoundsException("No room on user stack to push data", e);
 			}
@@ -292,18 +284,17 @@ public enum OpCode {
 	 */
 	POP_DAT(0x11, OpCodeParam.DEST_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
 
 			try {
-				long value = userStackByteBuffer.getLong();
+				long value = state.userStackByteBuffer.getLong();
 
 				// Clear old stack entry
-				userStackByteBuffer.putLong(userStackByteBuffer.position() - MachineState.VALUE_SIZE, 0L);
+				state.userStackByteBuffer.putLong(state.userStackByteBuffer.position() - MachineState.VALUE_SIZE, 0L);
 
 				// Put popped value into data address
-				dataByteBuffer.putLong(address, value);
+				state.dataByteBuffer.putLong(address, value);
 			} catch (BufferUnderflowException e) {
 				throw new StackBoundsException("Empty user stack from which to pop data", e);
 			}
@@ -317,20 +308,19 @@ public enum OpCode {
 	 */
 	JMP_SUB(0x12, OpCodeParam.CODE_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getCodeAddress(codeByteBuffer);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
 
 			try {
 				// Simulate backwards-walking stack
-				int newPosition = callStackByteBuffer.position() - MachineState.ADDRESS_SIZE;
-				callStackByteBuffer.putInt(newPosition, codeByteBuffer.position());
-				callStackByteBuffer.position(newPosition);
+				int newPosition = state.callStackByteBuffer.position() - MachineState.ADDRESS_SIZE;
+				state.callStackByteBuffer.putInt(newPosition, state.codeByteBuffer.position());
+				state.callStackByteBuffer.position(newPosition);
 			} catch (IndexOutOfBoundsException | IllegalArgumentException e) {
 				throw new StackBoundsException("No room on call stack to call subroutine", e);
 			}
 
-			codeByteBuffer.position(address);
+			state.codeByteBuffer.position(address);
 		}
 	},
 	/**
@@ -341,15 +331,14 @@ public enum OpCode {
 	 */
 	RET_SUB(0x13) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
 			try {
-				int returnAddress = callStackByteBuffer.getInt();
+				int returnAddress = state.callStackByteBuffer.getInt();
 
 				// Clear old stack entry
-				callStackByteBuffer.putInt(callStackByteBuffer.position() - MachineState.ADDRESS_SIZE, 0);
+				state.callStackByteBuffer.putInt(state.callStackByteBuffer.position() - MachineState.ADDRESS_SIZE, 0);
 
-				codeByteBuffer.position(returnAddress);
+				state.codeByteBuffer.position(returnAddress);
 			} catch (BufferUnderflowException e) {
 				throw new StackBoundsException("Empty call stack missing return address from subroutine", e);
 			}
@@ -362,18 +351,17 @@ public enum OpCode {
 	 */
 	IND_DAT(0x14, OpCodeParam.INDIRECT_DEST_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address1 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			int address2 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address1 = (int) args[0];
+			int address2 = (int) args[1];
 
-			long address3 = dataByteBuffer.getLong(address1) * MachineState.VALUE_SIZE;
+			long address3 = state.dataByteBuffer.getLong(address1) * MachineState.VALUE_SIZE;
 
-			if (address3 < 0 || address3 + MachineState.VALUE_SIZE >= dataByteBuffer.limit())
+			if (address3 < 0 || address3 + MachineState.VALUE_SIZE >= state.dataByteBuffer.limit())
 				throw new InvalidAddressException("Data address out of bounds");
 
-			long value = dataByteBuffer.getLong(address2);
-			dataByteBuffer.putLong((int) address3, value);
+			long value = state.dataByteBuffer.getLong(address2);
+			state.dataByteBuffer.putLong((int) address3, value);
 		}
 	},
 	/**
@@ -383,22 +371,21 @@ public enum OpCode {
 	 */
 	IDX_DAT(0x15, OpCodeParam.INDIRECT_DEST_ADDR_WITH_INDEX, OpCodeParam.INDEX, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address1 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			int address2 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			int address3 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address1 = (int) args[0];
+			int address2 = (int) args[1];
+			int address3 = (int) args[2];
 
-			long baseAddress = dataByteBuffer.getLong(address1) * MachineState.VALUE_SIZE;
-			long offset = dataByteBuffer.getLong(address2) * MachineState.VALUE_SIZE;
+			long baseAddress = state.dataByteBuffer.getLong(address1) * MachineState.VALUE_SIZE;
+			long offset = state.dataByteBuffer.getLong(address2) * MachineState.VALUE_SIZE;
 
 			long newAddress = baseAddress + offset;
 
-			if (newAddress < 0 || newAddress + MachineState.VALUE_SIZE >= dataByteBuffer.limit())
+			if (newAddress < 0 || newAddress + MachineState.VALUE_SIZE >= state.dataByteBuffer.limit())
 				throw new InvalidAddressException("Data address out of bounds");
 
-			long value = dataByteBuffer.getLong(address3);
-			dataByteBuffer.putLong((int) newAddress, value);
+			long value = state.dataByteBuffer.getLong(address3);
+			state.dataByteBuffer.putLong((int) newAddress, value);
 		}
 	},
 	/**
@@ -408,10 +395,9 @@ public enum OpCode {
 	 */
 	MOD_DAT(0x16, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
 			try {
-				executeDataOperation(codeByteBuffer, dataByteBuffer, (a, b) -> a % b);
+				executeDataOperation(state, (a, b) -> a % b, args);
 			} catch (ArithmeticException e) {
 				throw new IllegalOperationException("Divide by zero", e);
 			}
@@ -426,10 +412,9 @@ public enum OpCode {
 		private static final long MAX_SHIFT = MachineState.VALUE_SIZE * 8;
 
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
 			// If 2nd arg is more than value size (in bits) then return 0 to simulate all bits being shifted out of existence
-			executeDataOperation(codeByteBuffer, dataByteBuffer, (a, b) -> b >= MAX_SHIFT ? 0 : a << b);
+			executeDataOperation(state, (a, b) -> b >= MAX_SHIFT ? 0 : a << b, args);
 		}
 	},
 	/**
@@ -442,10 +427,9 @@ public enum OpCode {
 		private static final long MAX_SHIFT = MachineState.VALUE_SIZE * 8;
 
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
 			// If 2nd arg is more than value size (in bits) then return 0 to simulate all bits being shifted out of existence
-			executeDataOperation(codeByteBuffer, dataByteBuffer, (a, b) -> b >= MAX_SHIFT ? 0 : a >>> b);
+			executeDataOperation(state, (a, b) -> b >= MAX_SHIFT ? 0 : a >>> b, args);
 		}
 	},
 	/**
@@ -455,11 +439,10 @@ public enum OpCode {
 	 */
 	JMP_ADR(0x1a, OpCodeParam.CODE_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getCodeAddress(codeByteBuffer);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
 
-			codeByteBuffer.position(address);
+			state.codeByteBuffer.position(address);
 		}
 	},
 	/**
@@ -470,22 +453,19 @@ public enum OpCode {
 	 */
 	BZR_DAT(0x1b, OpCodeParam.SRC_ADDR, OpCodeParam.OFFSET) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int opCodePosition = codeByteBuffer.position() - 1; // i.e. before this OpCode
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
+			byte offset = (byte) args[1];
 
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			byte offset = Utils.getCodeOffset(codeByteBuffer);
+			int branchTarget = state.getProgramCounter() + offset;
 
-			int branchTarget = opCodePosition + offset;
-
-			if (branchTarget < 0 || branchTarget >= codeByteBuffer.limit())
+			if (branchTarget < 0 || branchTarget >= state.codeByteBuffer.limit())
 				throw new InvalidAddressException("branch target out of bounds");
 
-			long value = dataByteBuffer.getLong(address);
+			long value = state.dataByteBuffer.getLong(address);
 
 			if (value == 0)
-				codeByteBuffer.position(branchTarget);
+				state.codeByteBuffer.position(branchTarget);
 		}
 	},
 	/**
@@ -496,22 +476,19 @@ public enum OpCode {
 	 */
 	BNZ_DAT(0x1e, OpCodeParam.SRC_ADDR, OpCodeParam.OFFSET) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int opCodePosition = codeByteBuffer.position() - 1; // i.e. before this OpCode
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
+			byte offset = (byte) args[1];
 
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			byte offset = Utils.getCodeOffset(codeByteBuffer);
+			int branchTarget = state.getProgramCounter() + offset;
 
-			int branchTarget = opCodePosition + offset;
-
-			if (branchTarget < 0 || branchTarget >= codeByteBuffer.limit())
+			if (branchTarget < 0 || branchTarget >= state.codeByteBuffer.limit())
 				throw new InvalidAddressException("branch target out of bounds");
 
-			long value = dataByteBuffer.getLong(address);
+			long value = state.dataByteBuffer.getLong(address);
 
 			if (value != 0)
-				codeByteBuffer.position(branchTarget);
+				state.codeByteBuffer.position(branchTarget);
 		}
 	},
 	/**
@@ -522,9 +499,8 @@ public enum OpCode {
 	 */
 	BGT_DAT(0x1f, OpCodeParam.SRC_ADDR, OpCodeParam.SRC_ADDR, OpCodeParam.OFFSET) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeBranchConditional(codeByteBuffer, dataByteBuffer, state, (a, b) -> a > b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeBranchConditional(state, (a, b) -> a > b, args);
 		}
 	},
 	/**
@@ -535,9 +511,8 @@ public enum OpCode {
 	 */
 	BLT_DAT(0x20, OpCodeParam.SRC_ADDR, OpCodeParam.SRC_ADDR, OpCodeParam.OFFSET) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeBranchConditional(codeByteBuffer, dataByteBuffer, state, (a, b) -> a < b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeBranchConditional(state, (a, b) -> a < b, args);
 		}
 	},
 	/**
@@ -548,9 +523,8 @@ public enum OpCode {
 	 */
 	BGE_DAT(0x21, OpCodeParam.SRC_ADDR, OpCodeParam.SRC_ADDR, OpCodeParam.OFFSET) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeBranchConditional(codeByteBuffer, dataByteBuffer, state, (a, b) -> a >= b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeBranchConditional(state, (a, b) -> a >= b, args);
 		}
 	},
 	/**
@@ -561,9 +535,8 @@ public enum OpCode {
 	 */
 	BLE_DAT(0x22, OpCodeParam.SRC_ADDR, OpCodeParam.SRC_ADDR, OpCodeParam.OFFSET) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeBranchConditional(codeByteBuffer, dataByteBuffer, state, (a, b) -> a <= b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeBranchConditional(state, (a, b) -> a <= b, args);
 		}
 	},
 	/**
@@ -574,9 +547,8 @@ public enum OpCode {
 	 */
 	BEQ_DAT(0x23, OpCodeParam.SRC_ADDR, OpCodeParam.SRC_ADDR, OpCodeParam.OFFSET) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeBranchConditional(codeByteBuffer, dataByteBuffer, state, (a, b) -> a == b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeBranchConditional(state, (a, b) -> a == b, args);
 		}
 	},
 	/**
@@ -587,9 +559,8 @@ public enum OpCode {
 	 */
 	BNE_DAT(0x24, OpCodeParam.SRC_ADDR, OpCodeParam.SRC_ADDR, OpCodeParam.OFFSET) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			executeBranchConditional(codeByteBuffer, dataByteBuffer, state, (a, b) -> a != b);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			executeBranchConditional(state, (a, b) -> a != b, args);
 		}
 	},
 	/**
@@ -600,13 +571,13 @@ public enum OpCode {
 	 */
 	SLP_DAT(0x25, OpCodeParam.BLOCK_HEIGHT) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getCodeAddress(codeByteBuffer);
-			long value = codeByteBuffer.getLong(address);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
 
-			state.sleepUntilHeight = (int) value;
-			state.isSleeping = true;
+			long value = state.codeByteBuffer.getLong(address);
+
+			state.setSleepUntilHeight((int) value);
+			state.setIsSleeping(true);
 		}
 	},
 	/**
@@ -616,13 +587,13 @@ public enum OpCode {
 	 */
 	FIZ_DAT(0x26, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			long value = dataByteBuffer.getLong(address);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
+
+			long value = state.dataByteBuffer.getLong(address);
 
 			if (value == 0)
-				state.isFinished = true;
+				state.setIsFinished(true);
 		}
 	},
 	/**
@@ -632,15 +603,14 @@ public enum OpCode {
 	 */
 	STZ_DAT(0x27, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			long value = dataByteBuffer.getLong(address);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
+
+			long value = state.dataByteBuffer.getLong(address);
 
 			if (value == 0) {
-				state.programCounter = state.onStopAddress;
-				codeByteBuffer.position(state.onStopAddress);
-				state.isStopped = true;
+				state.codeByteBuffer.position(state.getOnStopAddress());
+				state.setIsStopped(true);
 			}
 		}
 	},
@@ -651,9 +621,8 @@ public enum OpCode {
 	 */
 	FIN_IMD(0x28) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			state.isFinished = true;
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			state.setIsFinished(true);
 		}
 	},
 	/**
@@ -663,9 +632,8 @@ public enum OpCode {
 	 */
 	STP_IMD(0x29) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) {
-			state.isStopped = true;
+		public void executeWithParams(MachineState state, Object... args) {
+			state.setIsStopped(true);
 		}
 	},
 	/**
@@ -675,10 +643,9 @@ public enum OpCode {
 	 */
 	SLP_IMD(0x2a) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) {
-			state.sleepUntilHeight = state.currentBlockHeight + 1;
-			state.isSleeping = true;
+		public void executeWithParams(MachineState state, Object... args) {
+			state.setSleepUntilHeight(state.getCurrentBlockHeight() + 1);
+			state.setIsSleeping(true);
 		}
 	},
 	/**
@@ -688,11 +655,10 @@ public enum OpCode {
 	 */
 	ERR_ADR(0x2b, OpCodeParam.CODE_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			int address = Utils.getCodeAddress(codeByteBuffer);
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			int address = (int) args[0];
 
-			state.onErrorAddress = address;
+			state.setOnErrorAddress(address);
 		}
 	},
 	/**
@@ -703,9 +669,8 @@ public enum OpCode {
 	 */
 	SET_PCS(0x30) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) {
-			state.onStopAddress = codeByteBuffer.position();
+		public void executeWithParams(MachineState state, Object... args) {
+			state.setOnStopAddress(state.codeByteBuffer.position());
 		}
 	},
 	/**
@@ -715,9 +680,9 @@ public enum OpCode {
 	 */
 	EXT_FUN(0x32, OpCodeParam.FUNC) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			short rawFunctionCode = codeByteBuffer.getShort();
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			short rawFunctionCode = (short) args[0];
+
 			FunctionCode functionCode = FunctionCode.valueOf(rawFunctionCode);
 
 			if (functionCode == null)
@@ -727,7 +692,7 @@ public enum OpCode {
 
 			FunctionData functionData = new FunctionData(false);
 
-			executeFunction(codeByteBuffer, functionCode, functionData, state, rawFunctionCode);
+			functionCode.execute(functionData, state, rawFunctionCode);
 		}
 	},
 	/**
@@ -737,9 +702,10 @@ public enum OpCode {
 	 */
 	EXT_FUN_DAT(0x33, OpCodeParam.FUNC, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			short rawFunctionCode = codeByteBuffer.getShort();
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			short rawFunctionCode = (short) args[0];
+			int address = (int) args[1];
+
 			FunctionCode functionCode = FunctionCode.valueOf(rawFunctionCode);
 
 			if (functionCode == null)
@@ -747,12 +713,11 @@ public enum OpCode {
 
 			functionCode.preExecuteCheck(1, false, state, rawFunctionCode);
 
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			long value = dataByteBuffer.getLong(address);
+			long value = state.dataByteBuffer.getLong(address);
 
 			FunctionData functionData = new FunctionData(value, false);
 
-			executeFunction(codeByteBuffer, functionCode, functionData, state, rawFunctionCode);
+			functionCode.execute(functionData, state, rawFunctionCode);
 		}
 	},
 	/**
@@ -762,9 +727,11 @@ public enum OpCode {
 	 */
 	EXT_FUN_DAT_2(0x34, OpCodeParam.FUNC, OpCodeParam.SRC_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			short rawFunctionCode = codeByteBuffer.getShort();
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			short rawFunctionCode = (short) args[0];
+			int address1 = (int) args[1];
+			int address2 = (int) args[2];
+
 			FunctionCode functionCode = FunctionCode.valueOf(rawFunctionCode);
 
 			if (functionCode == null)
@@ -772,15 +739,12 @@ public enum OpCode {
 
 			functionCode.preExecuteCheck(2, false, state, rawFunctionCode);
 
-			int address1 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			int address2 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-
-			long value1 = dataByteBuffer.getLong(address1);
-			long value2 = dataByteBuffer.getLong(address2);
+			long value1 = state.dataByteBuffer.getLong(address1);
+			long value2 = state.dataByteBuffer.getLong(address2);
 
 			FunctionData functionData = new FunctionData(value1, value2, false);
 
-			executeFunction(codeByteBuffer, functionCode, functionData, state, rawFunctionCode);
+			functionCode.execute(functionData, state, rawFunctionCode);
 		}
 	},
 	/**
@@ -790,9 +754,10 @@ public enum OpCode {
 	 */
 	EXT_FUN_RET(0x35, OpCodeParam.FUNC, OpCodeParam.DEST_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			short rawFunctionCode = codeByteBuffer.getShort();
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			short rawFunctionCode = (short) args[0];
+			int address = (int) args[1];
+
 			FunctionCode functionCode = FunctionCode.valueOf(rawFunctionCode);
 
 			if (functionCode == null)
@@ -800,16 +765,14 @@ public enum OpCode {
 
 			functionCode.preExecuteCheck(0, true, state, rawFunctionCode);
 
-			int address = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-
 			FunctionData functionData = new FunctionData(true);
 
-			executeFunction(codeByteBuffer, functionCode, functionData, state, rawFunctionCode);
+			functionCode.execute(functionData, state, rawFunctionCode);
 
 			if (functionData.returnValue == null)
 				throw new ExecutionException("Function failed to return a value as expected of EXT_FUN_RET");
 
-			dataByteBuffer.putLong(address, functionData.returnValue);
+			state.dataByteBuffer.putLong(address, functionData.returnValue);
 		}
 	},
 	/**
@@ -819,9 +782,11 @@ public enum OpCode {
 	 */
 	EXT_FUN_RET_DAT(0x36, OpCodeParam.FUNC, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			short rawFunctionCode = codeByteBuffer.getShort();
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			short rawFunctionCode = (short) args[0];
+			int address1 = (int) args[1];
+			int address2 = (int) args[2];
+
 			FunctionCode functionCode = FunctionCode.valueOf(rawFunctionCode);
 
 			if (functionCode == null)
@@ -829,19 +794,16 @@ public enum OpCode {
 
 			functionCode.preExecuteCheck(1, true, state, rawFunctionCode);
 
-			int address1 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			int address2 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-
-			long value = dataByteBuffer.getLong(address2);
+			long value = state.dataByteBuffer.getLong(address2);
 
 			FunctionData functionData = new FunctionData(value, true);
 
-			executeFunction(codeByteBuffer, functionCode, functionData, state, rawFunctionCode);
+			functionCode.execute(functionData, state, rawFunctionCode);
 
 			if (functionData.returnValue == null)
 				throw new ExecutionException("Function failed to return a value as expected of EXT_FUN_RET_DAT");
 
-			dataByteBuffer.putLong(address1, functionData.returnValue);
+			state.dataByteBuffer.putLong(address1, functionData.returnValue);
 		}
 	},
 	/**
@@ -851,9 +813,12 @@ public enum OpCode {
 	 */
 	EXT_FUN_RET_DAT_2(0x37, OpCodeParam.FUNC, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR, OpCodeParam.SRC_ADDR) {
 		@Override
-		public void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-				MachineState state) throws ExecutionException {
-			short rawFunctionCode = codeByteBuffer.getShort();
+		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
+			short rawFunctionCode = (short) args[0];
+			int address1 = (int) args[1];
+			int address2 = (int) args[2];
+			int address3 = (int) args[3];
+
 			FunctionCode functionCode = FunctionCode.valueOf(rawFunctionCode);
 
 			if (functionCode == null)
@@ -862,21 +827,17 @@ public enum OpCode {
 
 			functionCode.preExecuteCheck(2, true, state, rawFunctionCode);
 
-			int address1 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			int address2 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-			int address3 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-
-			long value1 = dataByteBuffer.getLong(address2);
-			long value2 = dataByteBuffer.getLong(address3);
+			long value1 = state.dataByteBuffer.getLong(address2);
+			long value2 = state.dataByteBuffer.getLong(address3);
 
 			FunctionData functionData = new FunctionData(value1, value2, true);
 
-			executeFunction(codeByteBuffer, functionCode, functionData, state, rawFunctionCode);
+			functionCode.execute(functionData, state, rawFunctionCode);
 
 			if (functionData.returnValue == null)
 				throw new ExecutionException("Function failed to return a value as expected of EXT_FUN_RET_DAT_2");
 
-			dataByteBuffer.putLong(address1, functionData.returnValue);
+			state.dataByteBuffer.putLong(address1, functionData.returnValue);
 		}
 	};
 
@@ -896,26 +857,32 @@ public enum OpCode {
 	}
 
 	/**
-	 * Execute OpCode
+	 * Execute OpCode with args fetched from code bytes
 	 * <p>
-	 * Assumes <tt>codeByteBuffer.position()</tt> is already placed immediately after opcode.
+	 * Assumes <tt>codeByteBuffer.position()</tt> is already placed immediately after opcode and params.<br>
+	 * <tt>state.getProgramCounter()</tt> is available to return position immediately before opcode and params.
 	 * <p>
-	 * Updates <tt>codeByteBuffer.position()</tt> as arguments are fetched, so caller should update <tt>state.programCounter</tt> using
-	 * <tt>codeByteBuffer.position()</tt> on return.
+	 * OpCode execution can modify <tt>codeByteBuffer.position()</tt> in cases like jumps, branches, etc.
 	 * <p>
 	 * Can also modify <tt>userStackByteBuffer</tt> and various fields of <tt>state</tt>.
 	 * <p>
 	 * Throws a subclass of <tt>ExecutionException</tt> on error, e.g. <tt>InvalidAddressException</tt>.
 	 * 
-	 * @param codeByteBuffer
-	 * @param dataByteBuffer
-	 * @param userStackByteBuffer
-	 * @param callStackByteBuffer
 	 * @param state
+	 * @param args
+	 * 
 	 * @throws ExecutionException
 	 */
-	public abstract void execute(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, ByteBuffer userStackByteBuffer, ByteBuffer callStackByteBuffer,
-			MachineState state) throws ExecutionException;
+	public abstract void executeWithParams(MachineState state, Object... args) throws ExecutionException;
+
+	public void execute(MachineState state) throws ExecutionException {
+		List<Object> args = new ArrayList<Object>();
+
+		for (OpCodeParam param : this.params)
+			args.add(param.fetch(state.codeByteBuffer, state.dataByteBuffer));
+
+		this.executeWithParams(state, args.toArray());
+	}
 
 	/**
 	 * Returns string representing disassembled OpCode and parameters
@@ -930,9 +897,8 @@ public enum OpCode {
 
 		int postOpcodeProgramCounter = codeByteBuffer.position();
 
-		for (OpCodeParam param : this.params) {
+		for (OpCodeParam param : this.params)
 			output += " " + param.disassemble(codeByteBuffer, dataByteBuffer, postOpcodeProgramCounter);
-		}
 
 		return output;
 	}
@@ -946,16 +912,16 @@ public enum OpCode {
 	 *            - typically a lambda operating on two <tt>long</tt> params, e.g. <tt>(a, b) -> a + b</tt>
 	 * @throws ExecutionException
 	 */
-	private static void executeDataOperation(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, TwoValueOperator operator) throws ExecutionException {
-		int address1 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-		int address2 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
+	private static void executeDataOperation(MachineState state, TwoValueOperator operator, Object... args) throws ExecutionException {
+		int address1 = (int) args[0];
+		int address2 = (int) args[1];
 
-		long value1 = dataByteBuffer.getLong(address1);
-		long value2 = dataByteBuffer.getLong(address2);
+		long value1 = state.dataByteBuffer.getLong(address1);
+		long value2 = state.dataByteBuffer.getLong(address2);
 
 		long newValue = operator.apply(value1, value2);
 
-		dataByteBuffer.putLong(address1, newValue);
+		state.dataByteBuffer.putLong(address1, newValue);
 	}
 
 	/**
@@ -968,47 +934,18 @@ public enum OpCode {
 	 *            - typically a lambda comparing two <tt>long</tt> params, e.g. <tt>(a, b) -> a == b</tt>
 	 * @throws ExecutionException
 	 */
-	private static void executeBranchConditional(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer, MachineState state, TwoValueComparator comparator)
-			throws ExecutionException {
-		int opCodePosition = codeByteBuffer.position() - 1; // i.e. before this OpCode
+	private static void executeBranchConditional(MachineState state, TwoValueComparator comparator, Object... args) throws ExecutionException {
+		int address1 = (int) args[0];
+		int address2 = (int) args[1];
+		byte offset = (byte) args[2];
 
-		int address1 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-		int address2 = Utils.getDataAddress(codeByteBuffer, dataByteBuffer);
-		byte offset = Utils.getCodeOffset(codeByteBuffer);
+		int branchTarget = state.getProgramCounter() + offset;
 
-		int branchTarget = opCodePosition + offset;
-
-		long value1 = dataByteBuffer.getLong(address1);
-		long value2 = dataByteBuffer.getLong(address2);
+		long value1 = state.dataByteBuffer.getLong(address1);
+		long value2 = state.dataByteBuffer.getLong(address2);
 
 		if (comparator.compare(value1, value2))
-			codeByteBuffer.position(branchTarget);
-	}
-
-	/**
-	 * Common code for executing a function.
-	 * <p>
-	 * Updates <tt>programCounter</tt> to <tt>codeByteBuffer</tt>'s position before calling function.<br>
-	 * Adjusts <tt>codeByteBuffer</tt> position to <tt>programCounter</tt> after calling function.
-	 * <p>
-	 * This is needed for functions that might use/alter the programCounter during their execution,<br>
-	 * for example {@link FunctionCode#GENERATE_RANDOM_USING_TX_IN_A}
-	 * 
-	 * @see FunctionCode#GENERATE_RANDOM_USING_TX_IN_A
-	 *
-	 * @param codeByteBuffer
-	 * @param functionCode
-	 * @param functionData
-	 * @param state
-	 * @throws ExecutionException
-	 */
-	private static void executeFunction(ByteBuffer codeByteBuffer, FunctionCode functionCode, FunctionData functionData, MachineState state,
-			short rawFunctionCode) throws ExecutionException {
-		state.programCounter = codeByteBuffer.position();
-
-		functionCode.execute(functionData, state, rawFunctionCode);
-
-		codeByteBuffer.position(state.programCounter);
+			state.codeByteBuffer.position(branchTarget);
 	}
 
 }

@@ -44,28 +44,6 @@ public class DisassemblyTests {
 		logger = null;
 	}
 
-	private void execute() {
-		System.out.println("Starting execution:");
-		System.out.println("Current block height: " + state.currentBlockHeight);
-
-		state.execute();
-
-		System.out.println("After execution:");
-		System.out.println("Steps: " + state.steps);
-		System.out.println("Program Counter: " + String.format("%04x", state.programCounter));
-		System.out.println("Stop Address: " + String.format("%04x", state.onStopAddress));
-		System.out.println("Error Address: " + (state.onErrorAddress == null ? "not set" : String.format("%04x", state.onErrorAddress)));
-		if (state.isSleeping)
-			System.out.println("Sleeping until current block height (" + state.currentBlockHeight + ") reaches " + state.sleepUntilHeight);
-		else
-			System.out.println("Sleeping: " + state.isSleeping);
-		System.out.println("Stopped: " + state.isStopped);
-		System.out.println("Finished: " + state.isFinished);
-		if (state.hadFatalError)
-			System.out.println("Finished due to fatal error!");
-		System.out.println("Frozen: " + state.isFrozen);
-	}
-
 	@Test
 	public void testMD160disassembly() throws ExecutionException {
 		// MD160 of ffffffffffffffffffffffffffffffffffffffffffffffff is 90e735014ea23aa89190121b229c06d58fc71e83

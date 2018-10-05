@@ -65,9 +65,6 @@ public class TestACCT {
 	private byte[] continueSimulation(byte[] savedState) {
 		state = MachineState.fromBytes(api, logger, savedState);
 
-		// Pretend we're on next block
-		state.currentBlockHeight++;
-
 		return executeAndCheck(state);
 	}
 
@@ -208,8 +205,8 @@ public class TestACCT {
 
 		byte[] savedState = simulate();
 
-		while (!state.isFinished) {
-			((ACCTAPI) state.api).generateNextBlock(secret);
+		while (!state.getIsFinished()) {
+			((ACCTAPI) state.getAPI()).generateNextBlock(secret);
 
 			savedState = continueSimulation(savedState);
 		}

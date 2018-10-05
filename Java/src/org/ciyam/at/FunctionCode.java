@@ -31,7 +31,7 @@ public enum FunctionCode {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
 			String message = String.valueOf(functionData.value1);
-			state.logger.echo(message);
+			state.getLogger().echo(message);
 		}
 	},
 	/**
@@ -671,7 +671,7 @@ public enum FunctionCode {
 	GET_BLOCK_TIMESTAMP(0x0300, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = Timestamp.toLong(state.api.getCurrentBlockHeight(), 0);
+			functionData.returnValue = Timestamp.toLong(state.getAPI().getCurrentBlockHeight(), 0);
 		}
 	},
 	/**
@@ -681,7 +681,7 @@ public enum FunctionCode {
 	GET_CREATION_TIMESTAMP(0x0301, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = Timestamp.toLong(state.api.getATCreationBlockHeight(state), 0);
+			functionData.returnValue = Timestamp.toLong(state.getAPI().getATCreationBlockHeight(state), 0);
 		}
 	},
 	/**
@@ -691,7 +691,7 @@ public enum FunctionCode {
 	GET_PREVIOUS_BLOCK_TIMESTAMP(0x0302, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = Timestamp.toLong(state.api.getPreviousBlockHeight(), 0);
+			functionData.returnValue = Timestamp.toLong(state.getAPI().getPreviousBlockHeight(), 0);
 		}
 	},
 	/**
@@ -701,7 +701,7 @@ public enum FunctionCode {
 	PUT_PREVIOUS_BLOCK_HASH_IN_A(0x0303, 0, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.api.putPreviousBlockHashInA(state);
+			state.getAPI().putPreviousBlockHashInA(state);
 		}
 	},
 	/**
@@ -712,7 +712,7 @@ public enum FunctionCode {
 	PUT_TX_AFTER_TIMESTAMP_IN_A(0x0304, 1, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.api.putTransactionAfterTimestampInA(new Timestamp(functionData.value1), state);
+			state.getAPI().putTransactionAfterTimestampInA(new Timestamp(functionData.value1), state);
 		}
 	},
 	/**
@@ -723,7 +723,7 @@ public enum FunctionCode {
 	GET_TYPE_FROM_TX_IN_A(0x0305, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = state.api.getTypeFromTransactionInA(state);
+			functionData.returnValue = state.getAPI().getTypeFromTransactionInA(state);
 		}
 	},
 	/**
@@ -734,7 +734,7 @@ public enum FunctionCode {
 	GET_AMOUNT_FROM_TX_IN_A(0x0306, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = state.api.getAmountFromTransactionInA(state);
+			functionData.returnValue = state.getAPI().getAmountFromTransactionInA(state);
 		}
 	},
 	/**
@@ -745,7 +745,7 @@ public enum FunctionCode {
 	GET_TIMESTAMP_FROM_TX_IN_A(0x0307, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = state.api.getTimestampFromTransactionInA(state);
+			functionData.returnValue = state.getAPI().getTimestampFromTransactionInA(state);
 		}
 	},
 	/**
@@ -757,15 +757,17 @@ public enum FunctionCode {
 	GENERATE_RANDOM_USING_TX_IN_A(0x0308, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = state.api.generateRandomUsingTransactionInA(state);
+			functionData.returnValue = state.getAPI().generateRandomUsingTransactionInA(state);
 
-			// If API set isSleeping then rewind program counter ready for being awoken
-			if (state.isSleeping) {
-				state.programCounter -= 1 + 2 + 4; // EXT_FUN_RET(1) + our function code(2) + address(4)
+			// If API set isSleeping then rewind program counter (actually codeByteBuffer) ready for being awoken
+			if (state.getIsSleeping()) {
+				// EXT_FUN_RET(1) + our function code(2) + address(4)
+				int newPosition = state.codeByteBuffer.position() - MachineState.OPCODE_SIZE - MachineState.FUNCTIONCODE_SIZE - MachineState.ADDRESS_SIZE;
+				state.codeByteBuffer.position(newPosition);
 
 				// If specific sleep height not set, default to next block
-				if (state.sleepUntilHeight == null)
-					state.sleepUntilHeight = state.currentBlockHeight + 1;
+				if (state.getSleepUntilHeight() == null)
+					state.setSleepUntilHeight(state.getCurrentBlockHeight() + 1);
 			}
 		}
 	},
@@ -778,7 +780,7 @@ public enum FunctionCode {
 	PUT_MESSAGE_FROM_TX_IN_A_INTO_B(0x0309, 0, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.api.putMessageFromTransactionInAIntoB(state);
+			state.getAPI().putMessageFromTransactionInAIntoB(state);
 		}
 	},
 	/**
@@ -788,7 +790,7 @@ public enum FunctionCode {
 	PUT_ADDRESS_FROM_TX_IN_A_INTO_B(0x030a, 0, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.api.putAddressFromTransactionInAIntoB(state);
+			state.getAPI().putAddressFromTransactionInAIntoB(state);
 		}
 	},
 	/**
@@ -798,7 +800,7 @@ public enum FunctionCode {
 	PUT_CREATOR_INTO_B(0x030b, 0, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.api.putCreatorAddressIntoB(state);
+			state.getAPI().putCreatorAddressIntoB(state);
 		}
 	},
 	/**
@@ -808,7 +810,7 @@ public enum FunctionCode {
 	GET_CURRENT_BALANCE(0x0400, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = state.api.getCurrentBalance(state);
+			functionData.returnValue = state.getAPI().getCurrentBalance(state);
 		}
 	},
 	/**
@@ -819,7 +821,7 @@ public enum FunctionCode {
 	GET_PREVIOUS_BALANCE(0x0401, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = state.api.getPreviousBalance(state);
+			functionData.returnValue = state.getAPI().getPreviousBalance(state);
 		}
 	},
 	/**
@@ -830,7 +832,7 @@ public enum FunctionCode {
 	PAY_TO_ADDRESS_IN_B(0x0402, 1, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.api.payAmountToB(functionData.value1, state);
+			state.getAPI().payAmountToB(functionData.value1, state);
 		}
 	},
 	/**
@@ -840,7 +842,7 @@ public enum FunctionCode {
 	PAY_ALL_TO_ADDRESS_IN_B(0x0403, 0, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.api.payCurrentBalanceToB(state);
+			state.getAPI().payCurrentBalanceToB(state);
 		}
 	},
 	/**
@@ -851,7 +853,7 @@ public enum FunctionCode {
 	PAY_PREVIOUS_TO_ADDRESS_IN_B(0x0404, 0, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.api.payPreviousBalanceToB(state);
+			state.getAPI().payPreviousBalanceToB(state);
 		}
 	},
 	/**
@@ -861,7 +863,7 @@ public enum FunctionCode {
 	MESSAGE_A_TO_ADDRESS_IN_B(0x0405, 0, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.api.messageAToB(state);
+			state.getAPI().messageAToB(state);
 		}
 	},
 	/**
@@ -871,7 +873,7 @@ public enum FunctionCode {
 	ADD_MINUTES_TO_TIMESTAMP(0x0406, 2, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = state.api.addMinutesToTimestamp(new Timestamp(functionData.value1), functionData.value2, state);
+			functionData.returnValue = state.getAPI().addMinutesToTimestamp(new Timestamp(functionData.value1), functionData.value2, state);
 		}
 	},
 	/**
@@ -882,12 +884,12 @@ public enum FunctionCode {
 	API_PASSTHROUGH(0x0500, 0, false) {
 		@Override
 		public void preExecuteCheck(int paramCount, boolean returnValueExpected, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.api.platformSpecificPreExecuteCheck(rawFunctionCode, paramCount, returnValueExpected);
+			state.getAPI().platformSpecificPreExecuteCheck(rawFunctionCode, paramCount, returnValueExpected);
 		}
 
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.api.platformSpecificPostCheckExecute(rawFunctionCode, functionData, state);
+			state.getAPI().platformSpecificPostCheckExecute(rawFunctionCode, functionData, state);
 		}
 	};
 
@@ -943,7 +945,7 @@ public enum FunctionCode {
 		if (functionData.paramCount == 2 && functionData.value2 == null)
 			throw new IllegalFunctionCodeException("Passed value2 is null but function has paramCount of (" + this.paramCount + ")");
 
-		state.logger.debug("Function \"" + this.name() + "\"");
+		state.getLogger().debug("Function \"" + this.name() + "\"");
 
 		postCheckExecute(functionData, state, rawFunctionCode);
 	}

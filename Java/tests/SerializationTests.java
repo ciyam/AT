@@ -5,7 +5,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 
-import org.ciyam.at.API;
 import org.ciyam.at.ExecutionException;
 import org.ciyam.at.FunctionCode;
 import org.ciyam.at.MachineState;
@@ -20,7 +19,7 @@ import common.TestLogger;
 public class SerializationTests {
 
 	public TestLogger logger;
-	public API api;
+	public TestAPI api;
 	public MachineState state;
 	public ByteBuffer codeByteBuffer;
 
@@ -53,7 +52,7 @@ public class SerializationTests {
 		state = MachineState.fromBytes(api, logger, savedState);
 
 		// Pretend we're on next block
-		state.currentBlockHeight++;
+		api.bumpCurrentBlockHeight();
 
 		return executeAndCheck(state);
 	}
@@ -79,9 +78,9 @@ public class SerializationTests {
 
 		simulate();
 
-		assertEquals(0x0e, (int) state.onStopAddress);
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
+		assertEquals(0x0e, (int) state.getOnStopAddress());
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
 	}
 
 	@Test
@@ -98,9 +97,9 @@ public class SerializationTests {
 
 		byte[] savedState = simulate();
 
-		assertEquals(0x0e, (int) state.onStopAddress);
-		assertTrue(state.isStopped);
-		assertFalse(state.hadFatalError);
+		assertEquals(0x0e, (int) state.getOnStopAddress());
+		assertTrue(state.getIsStopped());
+		assertFalse(state.getHadFatalError());
 
 		savedState = continueSimulation(savedState);
 		savedState = continueSimulation(savedState);

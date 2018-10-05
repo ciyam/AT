@@ -7,13 +7,23 @@ import org.ciyam.at.IllegalFunctionCodeException;
 import org.ciyam.at.MachineState;
 import org.ciyam.at.Timestamp;
 
-public class TestAPI implements API {
+public class TestAPI extends API {
 
 	private static final int BLOCK_PERIOD = 10 * 60; // average period between blocks in seconds
 
+	private int currentBlockHeight;
+
+	public TestAPI() {
+		this.currentBlockHeight = 10;
+	}
+
+	public void bumpCurrentBlockHeight() {
+		++this.currentBlockHeight;
+	}
+
 	@Override
 	public int getCurrentBlockHeight() {
-		return 10;
+		return this.currentBlockHeight;
 	}
 
 	@Override
@@ -23,19 +33,19 @@ public class TestAPI implements API {
 
 	@Override
 	public void putPreviousBlockHashInA(MachineState state) {
-		state.a1 = 9L;
-		state.a2 = 9L;
-		state.a3 = 9L;
-		state.a4 = 9L;
+		this.setA1(state, 9L);
+		this.setA2(state, 9L);
+		this.setA3(state, 9L);
+		this.setA4(state, 9L);
 	}
 
 	@Override
 	public void putTransactionAfterTimestampInA(Timestamp timestamp, MachineState state) {
 		// Cycle through transactions: 1 -> 2 -> 3 -> 0 -> 1 ...
-		state.a1 = (timestamp.transactionSequence + 1) % 4;
-		state.a2 = state.a1;
-		state.a3 = state.a1;
-		state.a4 = state.a1;
+		this.setA1(state, (timestamp.transactionSequence + 1) % 4);
+		this.setA2(state, state.getA1());
+		this.setA3(state, state.getA1());
+		this.setA4(state, state.getA1());
 	}
 
 	@Override
@@ -55,13 +65,13 @@ public class TestAPI implements API {
 
 	@Override
 	public long generateRandomUsingTransactionInA(MachineState state) {
-		if (state.steps != 0) {
+		if (state.getSteps() != 0) {
 			// First call
 			System.out.println("generateRandomUsingTransactionInA: first call - sleeping");
 
-			// Perform init?
+			// first-call initialization would go here
 
-			state.isSleeping = true;
+			this.setIsSleeping(state, true);
 
 			return 0L; // not used
 		} else {
@@ -69,34 +79,34 @@ public class TestAPI implements API {
 			System.out.println("generateRandomUsingTransactionInA: second call - returning random");
 
 			// HASH(A and new block hash)
-			return (state.a1 ^ 9L) << 3 ^ (state.a2 ^ 9L) << 12 ^ (state.a3 ^ 9L) << 5 ^ (state.a4 ^ 9L);
+			return (state.getA1() ^ 9L) << 3 ^ (state.getA2() ^ 9L) << 12 ^ (state.getA3() ^ 9L) << 5 ^ (state.getA4() ^ 9L);
 		}
 	}
 
 	@Override
 	public void putMessageFromTransactionInAIntoB(MachineState state) {
-		state.b1 = state.a4;
-		state.b2 = state.a3;
-		state.b3 = state.a2;
-		state.b4 = state.a1;
+		this.setB1(state, state.getA4());
+		this.setB2(state, state.getA3());
+		this.setB3(state, state.getA2());
+		this.setB4(state, state.getA1());
 	}
 
 	@Override
 	public void putAddressFromTransactionInAIntoB(MachineState state) {
 		// Dummy address
-		state.b1 = 0xaaaaaaaaaaaaaaaaL;
-		state.b2 = 0xaaaaaaaaaaaaaaaaL;
-		state.b3 = 0xaaaaaaaaaaaaaaaaL;
-		state.b4 = 0xaaaaaaaaaaaaaaaaL;
+		this.setB1(state, 0xaaaaaaaaaaaaaaaaL);
+		this.setB2(state, 0xaaaaaaaaaaaaaaaaL);
+		this.setB3(state, 0xaaaaaaaaaaaaaaaaL);
+		this.setB4(state, 0xaaaaaaaaaaaaaaaaL);
 	}
 
 	@Override
 	public void putCreatorAddressIntoB(MachineState state) {
 		// Dummy creator
-		state.b1 = 0xccccccccccccccccL;
-		state.b2 = 0xccccccccccccccccL;
-		state.b3 = 0xccccccccccccccccL;
-		state.b4 = 0xccccccccccccccccL;
+		this.setB1(state, 0xccccccccccccccccL);
+		this.setB2(state, 0xccccccccccccccccL);
+		this.setB3(state, 0xccccccccccccccccL);
+		this.setB4(state, 0xccccccccccccccccL);
 	}
 
 	@Override

@@ -1,89 +1,15 @@
 import static common.TestUtils.hexToBytes;
 import static org.junit.Assert.*;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.security.Security;
-
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.ciyam.at.API;
 import org.ciyam.at.ExecutionException;
 import org.ciyam.at.FunctionCode;
-import org.ciyam.at.MachineState;
 import org.ciyam.at.OpCode;
 import org.ciyam.at.Timestamp;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-import common.TestAPI;
-import common.TestLogger;
+import common.ExecutableTest;
 
-public class FunctionCodeTests {
-
-	public TestLogger logger;
-	public API api;
-	public MachineState state;
-	public ByteBuffer codeByteBuffer;
-
-	@BeforeClass
-	public static void beforeClass() {
-		Security.insertProviderAt(new BouncyCastleProvider(), 0);
-	}
-
-	@Before
-	public void beforeTest() {
-		logger = new TestLogger();
-		api = new TestAPI();
-		codeByteBuffer = ByteBuffer.allocate(512).order(ByteOrder.LITTLE_ENDIAN);
-	}
-
-	@After
-	public void afterTest() {
-		codeByteBuffer = null;
-		api = null;
-		logger = null;
-	}
-
-	private void execute() {
-		System.out.println("Starting execution:");
-		System.out.println("Current block height: " + state.currentBlockHeight);
-
-		state.execute();
-
-		System.out.println("After execution:");
-		System.out.println("Steps: " + state.steps);
-		System.out.println("Program Counter: " + String.format("%04x", state.programCounter));
-		System.out.println("Stop Address: " + String.format("%04x", state.onStopAddress));
-		System.out.println("Error Address: " + (state.onErrorAddress == null ? "not set" : String.format("%04x", state.onErrorAddress)));
-		if (state.isSleeping)
-			System.out.println("Sleeping until current block height (" + state.currentBlockHeight + ") reaches " + state.sleepUntilHeight);
-		else
-			System.out.println("Sleeping: " + state.isSleeping);
-		System.out.println("Stopped: " + state.isStopped);
-		System.out.println("Finished: " + state.isFinished);
-		if (state.hadFatalError)
-			System.out.println("Finished due to fatal error!");
-		System.out.println("Frozen: " + state.isFrozen);
-	}
-
-	private void simulate() {
-		// version 0003, reserved 0000, code 0200 * 1, data 0020 * 8, call stack 0010 * 4, user stack 0010 * 8
-		byte[] headerBytes = hexToBytes("0300" + "0000" + "0002" + "2000" + "1000" + "1000");
-		byte[] codeBytes = codeByteBuffer.array();
-		byte[] dataBytes = new byte[0];
-
-		state = new MachineState(api, logger, headerBytes, codeBytes, dataBytes);
-
-		do {
-			execute();
-
-			// Bump block height
-			state.currentBlockHeight++;
-		} while (!state.isFinished);
-
-	}
+public class FunctionCodeTests extends ExecutableTest {
 
 	@Test
 	public void testMD5() throws ExecutionException {
@@ -109,11 +35,11 @@ public class FunctionCodeTests {
 
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("MD5 hashes do not match", 1L, state.dataByteBuffer.getLong(1 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("MD5 hashes do not match", 1L, getData(1));
 	}
 
 	@Test
@@ -134,11 +60,11 @@ public class FunctionCodeTests {
 
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("MD5 hashes do not match", 1L, state.dataByteBuffer.getLong(1 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("MD5 hashes do not match", 1L, getData(1));
 	}
 
 	@Test
@@ -165,11 +91,11 @@ public class FunctionCodeTests {
 
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("RIPEMD160 hashes do not match", 1L, state.dataByteBuffer.getLong(1 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("RIPEMD160 hashes do not match", 1L, getData(1));
 	}
 
 	@Test
@@ -192,11 +118,11 @@ public class FunctionCodeTests {
 
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertEquals("RIPEMD160 hashes do not match", 1L, state.dataByteBuffer.getLong(1 * MachineState.VALUE_SIZE));
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
+		assertEquals("RIPEMD160 hashes do not match", 1L, getData(1));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
 	}
 
 	@Test
@@ -223,11 +149,11 @@ public class FunctionCodeTests {
 
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
-		assertEquals("RIPEMD160 hashes do not match", 1L, state.dataByteBuffer.getLong(1 * MachineState.VALUE_SIZE));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
+		assertEquals("RIPEMD160 hashes do not match", 1L, getData(1));
 	}
 
 	@Test
@@ -252,11 +178,11 @@ public class FunctionCodeTests {
 
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertEquals("RIPEMD160 hashes do not match", 1L, state.dataByteBuffer.getLong(1 * MachineState.VALUE_SIZE));
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
+		assertEquals("RIPEMD160 hashes do not match", 1L, getData(1));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
 	}
 
 	@Test
@@ -266,11 +192,11 @@ public class FunctionCodeTests {
 		codeByteBuffer.put(OpCode.EXT_FUN_RET.value).putShort(FunctionCode.GENERATE_RANDOM_USING_TX_IN_A.value).putInt(1);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(false);
 
-		assertNotEquals("Random wasn't generated", 0L, state.dataByteBuffer.getLong(1 * MachineState.VALUE_SIZE));
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
+		assertNotEquals("Random wasn't generated", 0L, getData(1));
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
 	}
 
 	@Test
@@ -278,10 +204,10 @@ public class FunctionCodeTests {
 		codeByteBuffer.put(OpCode.EXT_FUN.value).putShort((short) 0xaaaa);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 	@Test
@@ -290,10 +216,10 @@ public class FunctionCodeTests {
 		codeByteBuffer.put(OpCode.EXT_FUN_DAT.value).putShort((short) 0x0501).putInt(0);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertFalse(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertFalse(state.getHadFatalError());
 	}
 
 	@Test
@@ -302,10 +228,10 @@ public class FunctionCodeTests {
 		codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT_2.value).putShort((short) 0x0501).putInt(0).putInt(0); // Wrong OPCODE for function
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		simulate();
+		execute(true);
 
-		assertTrue(state.isFinished);
-		assertTrue(state.hadFatalError);
+		assertTrue(state.getIsFinished());
+		assertTrue(state.getHadFatalError());
 	}
 
 }

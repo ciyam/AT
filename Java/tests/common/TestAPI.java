@@ -5,6 +5,7 @@ import org.ciyam.at.ExecutionException;
 import org.ciyam.at.FunctionData;
 import org.ciyam.at.IllegalFunctionCodeException;
 import org.ciyam.at.MachineState;
+import org.ciyam.at.OpCode;
 import org.ciyam.at.Timestamp;
 
 public class TestAPI extends API {
@@ -19,6 +20,19 @@ public class TestAPI extends API {
 
 	public void bumpCurrentBlockHeight() {
 		++this.currentBlockHeight;
+	}
+
+	@Override
+	public int getOpCodeSteps(OpCode opcode) {
+		if (opcode.value >= OpCode.EXT_FUN.value && opcode.value <= OpCode.EXT_FUN_RET_DAT_2.value)
+			return 10;
+
+		return 1;
+	}
+
+	@Override
+	public long getFeePerStep() {
+		return 1L;
 	}
 
 	@Override
@@ -65,7 +79,7 @@ public class TestAPI extends API {
 
 	@Override
 	public long generateRandomUsingTransactionInA(MachineState state) {
-		if (state.getSteps() != 0) {
+		if (isFirstOpCodeAfterSleeping(state)) {
 			// First call
 			System.out.println("generateRandomUsingTransactionInA: first call - sleeping");
 
@@ -115,20 +129,7 @@ public class TestAPI extends API {
 	}
 
 	@Override
-	public long getPreviousBalance(MachineState state) {
-		return 10000L;
-	}
-
-	@Override
-	public void payAmountToB(long value1, MachineState state) {
-	}
-
-	@Override
-	public void payCurrentBalanceToB(MachineState state) {
-	}
-
-	@Override
-	public void payPreviousBalanceToB(MachineState state) {
+	public void payAmountToB(long amount, MachineState state) {
 	}
 
 	@Override
@@ -142,9 +143,14 @@ public class TestAPI extends API {
 	}
 
 	@Override
+	public void onFinished(long amount, MachineState state) {
+		System.out.println("Finished - refunding remaining to creator");
+	}
+
+	@Override
 	public void onFatalError(MachineState state, ExecutionException e) {
 		System.out.println("Fatal error: " + e.getMessage());
-		System.out.println("No error address set - refunding to creator and finishing");
+		System.out.println("No error address set - will refund to creator and finish");
 	}
 
 	@Override

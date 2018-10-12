@@ -12,6 +12,7 @@ import org.ciyam.at.ExecutionException;
 import org.ciyam.at.FunctionData;
 import org.ciyam.at.IllegalFunctionCodeException;
 import org.ciyam.at.MachineState;
+import org.ciyam.at.OpCode;
 import org.ciyam.at.Timestamp;
 
 public class ACCTAPI extends API {
@@ -46,7 +47,6 @@ public class ACCTAPI extends API {
 	private List<Block> blockchain;
 	private Map<String, Account> accounts;
 	private long balanceAT;
-	private long previousBalanceAT;
 
 	//
 	public ACCTAPI() {
@@ -68,8 +68,10 @@ public class ACCTAPI extends API {
 		Account bystander = new Account("Bystander", 999);
 		this.accounts.put(bystander.address, bystander);
 
+		Account creator = new Account("Creator", 0);
+		this.accounts.put(creator.address, creator);
+
 		this.balanceAT = 50000;
-		this.previousBalanceAT = this.balanceAT;
 	}
 
 	public void generateNextBlock(byte[] secret) {
@@ -125,8 +127,6 @@ public class ACCTAPI extends API {
 		}
 
 		this.blockchain.add(block);
-
-		this.previousBalanceAT = this.balanceAT;
 	}
 
 	/** Convert long to little-endian byte array */
@@ -148,6 +148,16 @@ public class ACCTAPI extends API {
 
 		List<Account> accounts = this.accounts.values().stream().collect(Collectors.toList());
 		return accounts.get(accountIndex).address;
+	}
+
+	@Override
+	public int getOpCodeSteps(OpCode opcode) {
+		return 1;
+	}
+
+	@Override
+	public long getFeePerStep() {
+		return 1L;
 	}
 
 	@Override
@@ -274,29 +284,24 @@ public class ACCTAPI extends API {
 		return this.balanceAT;
 	}
 
-	@Override
-	public long getPreviousBalance(MachineState state) {
-		return this.previousBalanceAT;
+	public void setCurrentBalance(long balance) {
+		this.balanceAT = balance;
+		System.out.println("New AT balance: " + balance);
 	}
 
 	@Override
-	public void payAmountToB(long value1, MachineState state) {
-		char firstChar = String.format("%c", state.getB1()).charAt(0);
+	public void payAmountToB(long amount, MachineState state) {
+		// Determine recipient using first char in B1
+		char firstChar = String.format("%c", (byte) state.getB1()).charAt(0);
 		Account recipient = this.accounts.values().stream().filter((account) -> account.address.charAt(0) == firstChar).findFirst().get();
-		recipient.balance += value1;
-		System.out.println("Paid " + value1 + " to " + recipient.address + ", their balance now: " + recipient.balance);
-		this.balanceAT -= value1;
-		System.out.println("Our balance now: " + this.balanceAT);
-	}
 
-	@Override
-	public void payCurrentBalanceToB(MachineState state) {
-		// NOT USED
-	}
+		// Simulate payment
+		recipient.balance += amount;
+		System.out.println("Paid " + amount + " to " + recipient.address + ", their balance now: " + recipient.balance);
 
-	@Override
-	public void payPreviousBalanceToB(MachineState state) {
-		// NOT USED
+		// For debugging, output our new balance
+		long balance = state.getCurrentBalance() - amount;
+		System.out.println("Our balance now: " + balance);
 	}
 
 	@Override
@@ -311,9 +316,18 @@ public class ACCTAPI extends API {
 	}
 
 	@Override
+	public void onFinished(long amount, MachineState state) {
+		System.out.println("Finished - refunding remaining to creator");
+
+		Account creator = this.accounts.get("Creator");
+		creator.balance += amount;
+		System.out.println("Paid " + amount + " to " + creator.address + ", their balance now: " + creator.balance);
+	}
+
+	@Override
 	public void onFatalError(MachineState state, ExecutionException e) {
 		System.out.println("Fatal error: " + e.getMessage());
-		System.out.println("No error address set - refunding to creator and finishing");
+		System.out.println("No error address set - will refund to creator and finish");
 	}
 
 	@Override

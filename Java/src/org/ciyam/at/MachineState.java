@@ -26,7 +26,10 @@ public class MachineState {
 	public static final int ADDRESS_SIZE = 4;
 
 	/** Maximum value for an address in the code segment */
-	public static final int MAX_CODE_ADDRESS = 0x1fffffff;
+	public static final int MAX_CODE_ADDRESS = 0x0000ffff;
+
+	/** Maximum number of steps per execution round */
+	public static final int MAX_STEPS = 500;
 
 	private static class VersionedConstants {
 		/** Bytes per code page */
@@ -109,10 +112,17 @@ public class MachineState {
 	/* package */ long b3;
 	/* package */ long b4;
 
+	// Internal use
 	private int currentBlockHeight;
+	private long currentBalance;
 
-	/** Number of opcodes processed this execution */
+	/** Previous balance after end of last round of execution */
+	private long previousBalance;
+
+	/** Number of opcodes processed this execution round */
 	private int steps;
+
+	private boolean isFirstOpCodeAfterSleeping;
 
 	private API api;
 	private LoggerInterface logger;
@@ -175,6 +185,8 @@ public class MachineState {
 
 		this.api = api;
 		this.currentBlockHeight = 0;
+		this.currentBalance = 0;
+		this.previousBalance = 0;
 		this.steps = 0;
 		this.logger = logger;
 	}
@@ -223,6 +235,7 @@ public class MachineState {
 		this.frozenBalance = null;
 		this.isFinished = false;
 		this.hadFatalError = false;
+		this.previousBalance = 0;
 	}
 
 	// Getters / setters
@@ -344,6 +357,7 @@ public class MachineState {
 		return this.currentBlockHeight;
 	}
 
+	/** So API can determine final execution fee */
 	public int getSteps() {
 		return this.steps;
 	}
@@ -354,6 +368,25 @@ public class MachineState {
 
 	public LoggerInterface getLogger() {
 		return this.logger;
+	}
+
+	public long getCurrentBalance() {
+		return this.currentBalance;
+	}
+
+	// For FunctionCode use
+	/* package */ void setCurrentBalance(long currentBalance) {
+		this.currentBalance = currentBalance;
+	}
+
+	// For FunctionCode use
+	/* package */ long getPreviousBalance() {
+		return this.previousBalance;
+	}
+
+	// For FunctionCode/API use
+	/* package */ boolean isFirstOpCodeAfterSleeping() {
+		return this.isFirstOpCodeAfterSleeping;
 	}
 
 	// Serialization
@@ -387,6 +420,7 @@ public class MachineState {
 			// Actual state
 			bytes.write(toByteArray(this.programCounter));
 			bytes.write(toByteArray(this.onStopAddress));
+			bytes.write(toByteArray(this.previousBalance));
 
 			// Various flags
 			Flags flags = new Flags();
@@ -474,6 +508,7 @@ public class MachineState {
 		// Actual state
 		state.programCounter = byteBuffer.getInt();
 		state.onStopAddress = byteBuffer.getInt();
+		state.previousBalance = byteBuffer.getLong();
 
 		// Various flags (reverse order to toBytes)
 		Flags flags = state.new Flags(byteBuffer.getInt());
@@ -555,11 +590,39 @@ public class MachineState {
 				(byte) (value >> 48), (byte) (value >> 56) };
 	}
 
-	// Actual execution
-
+	/**
+	 * Actually perform a round of execution
+	 * <p>
+	 * On return, caller is expected to call getCurrentBalance() to update their account records, and also to call getSteps() to calculate final execution fee
+	 * for block records.
+	 */
 	public void execute() {
-		// Set byte buffer position using program counter
-		codeByteBuffer.position(this.programCounter);
+		// Initialization
+		this.steps = 0;
+		this.currentBlockHeight = api.getCurrentBlockHeight();
+		this.currentBalance = api.getCurrentBalance(this);
+		this.isFirstOpCodeAfterSleeping = false;
+
+		// Pre-execution checks
+		if (this.isFinished) {
+			logger.debug("Not executing as already finished!");
+			return;
+		}
+
+		if (this.isFrozen && this.currentBalance <= this.frozenBalance) {
+			logger.debug("Not executing as current balance [" + this.currentBalance + "] hasn't increased since being frozen at [" + this.frozenBalance + "]");
+			return;
+		}
+
+		if (this.isSleeping && this.sleepUntilHeight != null && this.currentBlockHeight < this.sleepUntilHeight) {
+			logger.debug("Not executing as current block height [" + this.currentBlockHeight + "] hasn't reached sleep-until block height ["
+					+ this.sleepUntilHeight + "]");
+			return;
+		}
+
+		// If we were previously sleeping then set first-opcode-after-sleeping to help FunctionCodes that need to detect this
+		if (this.isSleeping)
+			this.isFirstOpCodeAfterSleeping = true;
 
 		// Reset for this round of execution
 		this.isSleeping = false;
@@ -567,8 +630,11 @@ public class MachineState {
 		this.isStopped = false;
 		this.isFrozen = false;
 		this.frozenBalance = null;
-		this.steps = 0;
-		this.currentBlockHeight = api.getCurrentBlockHeight();
+
+		long feePerStep = this.api.getFeePerStep();
+
+		// Set byte buffer position using program counter
+		codeByteBuffer.position(this.programCounter);
 
 		while (!this.isSleeping && !this.isStopped && !this.isFinished && !this.isFrozen) {
 			byte rawOpCode = codeByteBuffer.get();
@@ -580,7 +646,27 @@ public class MachineState {
 
 				this.logger.debug("[PC: " + String.format("%04x", this.programCounter) + "] " + nextOpCode.name());
 
-				// TODO: Request cost from API, apply cost to balance, etc.
+				// Request opcode step-fee from API, apply fee to balance, etc.
+				int opcodeSteps = this.api.getOpCodeSteps(nextOpCode);
+				long opcodeFee = opcodeSteps * feePerStep;
+
+				if (this.steps + opcodeSteps > MAX_STEPS) {
+					logger.debug("Enforced sleep due to exceeding maximum number of steps (" + MAX_STEPS + ") per execution round");
+					this.isSleeping = true;
+					break;
+				}
+
+				if (this.currentBalance < opcodeFee) {
+					// Not enough balance left to continue execution - freeze AT
+					logger.debug("Frozen due to lack of balance");
+					this.isFrozen = true;
+					this.frozenBalance = this.currentBalance;
+					break;
+				}
+
+				// Apply opcode step-fee
+				this.currentBalance -= opcodeFee;
+				this.steps += opcodeSteps;
 
 				// At this point, programCounter is BEFORE opcode (and args).
 				nextOpCode.execute(this);
@@ -594,7 +680,7 @@ public class MachineState {
 					this.isFinished = true;
 					this.hadFatalError = true;
 
-					// Ask API to refund remaining funds back to AT's creator
+					// Notify API that there was an error
 					this.api.onFatalError(this, e);
 					break;
 				}
@@ -603,13 +689,30 @@ public class MachineState {
 				codeByteBuffer.position(this.programCounter);
 			}
 
-			++this.steps;
+			// No longer true
+			this.isFirstOpCodeAfterSleeping = false;
+		}
+
+		if (this.isSleeping) {
+			if (this.sleepUntilHeight != null)
+				this.logger.debug("Sleeping until block " + this.sleepUntilHeight);
+			else
+				this.logger.debug("Sleeping until next block");
 		}
 
 		if (this.isStopped) {
 			this.logger.debug("Setting program counter to stop address: " + String.format("%04x", this.onStopAddress));
 			this.programCounter = this.onStopAddress;
 		}
+
+		if (this.isFinished) {
+			this.logger.debug("Finished - refunding remaining funds back to creator");
+			this.api.onFinished(this.currentBalance, this);
+			this.currentBalance = 0;
+		}
+
+		// Set new value for previousBalance prior to serialization, ready for next round
+		this.previousBalance = this.currentBalance;
 	}
 
 	/** Return disassembly of code bytes */

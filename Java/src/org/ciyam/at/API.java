@@ -12,6 +12,12 @@ package org.ciyam.at;
  */
 public abstract class API {
 
+	/** Returns fee for executing opcode in terms of execution "steps" */
+	public abstract int getOpCodeSteps(OpCode opcode);
+
+	/** Returns fee per execution "step" */
+	public abstract long getFeePerStep();
+
 	/** Returns current blockchain's height */
 	public abstract int getCurrentBlockHeight();
 
@@ -62,17 +68,8 @@ public abstract class API {
 	/** Return AT's current balance */
 	public abstract long getCurrentBalance(MachineState state);
 
-	/** Return AT's previous balance at end of last execution round. Does not include any amounts sent to AT since */
-	public abstract long getPreviousBalance(MachineState state);
-
 	/** Pay passed amount, or current balance if necessary, (fee inclusive) to address in B */
-	public abstract void payAmountToB(long value1, MachineState state);
-
-	/** Pay AT's current balance to address in B */
-	public abstract void payCurrentBalanceToB(MachineState state);
-
-	/** Pay AT's previous balance to address in B */
-	public abstract void payPreviousBalanceToB(MachineState state);
+	public abstract void payAmountToB(long amount, MachineState state);
 
 	/** Send 'message' in A to address in B */
 	public abstract void messageAToB(MachineState state);
@@ -84,7 +81,10 @@ public abstract class API {
 	 */
 	public abstract long addMinutesToTimestamp(Timestamp timestamp, long minutes, MachineState state);
 
-	/** AT has encountered fatal error. Return remaining funds to creator */
+	/** AT has finished. Return remaining funds to creator */
+	public abstract void onFinished(long amount, MachineState state);
+
+	/** AT has encountered fatal error */
 	public abstract void onFatalError(MachineState state, ExecutionException e);
 
 	/** Pre-execute checking of param requirements for platform-specific functions */
@@ -92,7 +92,7 @@ public abstract class API {
 			throws IllegalFunctionCodeException;
 
 	/**
-	 * Platform-specific function execution
+	 * Platform-specific function execution after checking correct calling OpCode
 	 * 
 	 * @throws ExecutionException
 	 */
@@ -101,6 +101,11 @@ public abstract class API {
 	/** Convenience method to allow subclasses to access package-scoped MachineState.setIsSleeping */
 	protected void setIsSleeping(MachineState state, boolean isSleeping) {
 		state.setIsSleeping(isSleeping);
+	}
+
+	/** Convenience method to allow subclasses to test package-scoped MachineState.isFirstOpCodeAfterSleeping */
+	protected boolean isFirstOpCodeAfterSleeping(MachineState state) {
+		return state.isFirstOpCodeAfterSleeping();
 	}
 
 	/** Convenience methods to allow subclasses to access package-scoped a1-a4, b1-b4 variables */

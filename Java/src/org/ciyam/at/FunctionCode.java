@@ -810,7 +810,7 @@ public enum FunctionCode {
 	GET_CURRENT_BALANCE(0x0400, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = state.getAPI().getCurrentBalance(state);
+			functionData.returnValue = state.getCurrentBalance();
 		}
 	},
 	/**
@@ -821,7 +821,7 @@ public enum FunctionCode {
 	GET_PREVIOUS_BALANCE(0x0401, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			functionData.returnValue = state.getAPI().getPreviousBalance(state);
+			functionData.returnValue = state.getPreviousBalance();
 		}
 	},
 	/**
@@ -832,7 +832,18 @@ public enum FunctionCode {
 	PAY_TO_ADDRESS_IN_B(0x0402, 1, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.getAPI().payAmountToB(functionData.value1, state);
+			// Reduce amount to current balance if insufficient funds to pay full amount in value1
+			long amount = Math.max(state.getCurrentBalance(), functionData.value1);
+
+			// Actually pay
+			state.getAPI().payAmountToB(amount, state);
+
+			// Update current balance to reflect payment
+			state.setCurrentBalance(state.getCurrentBalance() - amount);
+
+			// With no balance left, this AT is effectively finished?
+			if (state.getCurrentBalance() == 0)
+				state.setIsFinished(true);
 		}
 	},
 	/**
@@ -842,7 +853,11 @@ public enum FunctionCode {
 	PAY_ALL_TO_ADDRESS_IN_B(0x0403, 0, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.getAPI().payCurrentBalanceToB(state);
+			state.getAPI().payAmountToB(state.getCurrentBalance(), state);
+
+			// With no balance left, this AT is effectively finished?
+			state.setCurrentBalance(0);
+			state.setIsFinished(true);
 		}
 	},
 	/**
@@ -853,7 +868,18 @@ public enum FunctionCode {
 	PAY_PREVIOUS_TO_ADDRESS_IN_B(0x0404, 0, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.getAPI().payPreviousBalanceToB(state);
+			// Reduce amount to previous balance if insufficient funds to pay previous balance amount
+			long amount = Math.max(state.getCurrentBalance(), state.getPreviousBalance());
+
+			// Actually pay
+			state.getAPI().payAmountToB(amount, state);
+
+			// Update current balance to reflect payment
+			state.setCurrentBalance(state.getCurrentBalance() - amount);
+
+			// With no balance left, this AT is effectively finished?
+			if (state.getCurrentBalance() == 0)
+				state.setIsFinished(true);
 		}
 	},
 	/**

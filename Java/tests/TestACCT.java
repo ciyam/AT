@@ -71,6 +71,8 @@ public class TestACCT {
 	private byte[] executeAndCheck(MachineState state) {
 		state.execute();
 
+		api.setCurrentBalance(state.getCurrentBalance());
+
 		byte[] stateBytes = state.toBytes();
 		MachineState restoredState = MachineState.fromBytes(api, logger, stateBytes);
 		byte[] restoredStateBytes = restoredState.toBytes();

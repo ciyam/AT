@@ -13,13 +13,20 @@ public class TestAPI extends API {
 	private static final int BLOCK_PERIOD = 10 * 60; // average period between blocks in seconds
 
 	private int currentBlockHeight;
+	private long currentBalance;
 
 	public TestAPI() {
 		this.currentBlockHeight = 10;
+		this.currentBalance = 1234L;
 	}
 
 	public void bumpCurrentBlockHeight() {
 		++this.currentBlockHeight;
+	}
+
+	@Override
+	public int getMaxStepsPerRound() {
+		return 500;
 	}
 
 	@Override
@@ -79,7 +86,7 @@ public class TestAPI extends API {
 
 	@Override
 	public long generateRandomUsingTransactionInA(MachineState state) {
-		if (isFirstOpCodeAfterSleeping(state)) {
+		if (!isFirstOpCodeAfterSleeping(state)) {
 			// First call
 			System.out.println("generateRandomUsingTransactionInA: first call - sleeping");
 
@@ -125,7 +132,12 @@ public class TestAPI extends API {
 
 	@Override
 	public long getCurrentBalance(MachineState state) {
-		return 12345L;
+		return this.currentBalance;
+	}
+
+	// Debugging only
+	public void setCurrentBalance(long currentBalance) {
+		this.currentBalance = currentBalance;
 	}
 
 	@Override
@@ -154,11 +166,12 @@ public class TestAPI extends API {
 	}
 
 	@Override
-	public void platformSpecificPreExecuteCheck(short functionCodeValue, int paramCount, boolean returnValueExpected) throws IllegalFunctionCodeException {
+	public void platformSpecificPreExecuteCheck(int paramCount, boolean returnValueExpected, MachineState state, short rawFunctionCode)
+			throws IllegalFunctionCodeException {
 		Integer requiredParamCount;
 		Boolean returnsValue;
 
-		switch (functionCodeValue) {
+		switch (rawFunctionCode) {
 			case 0x0501:
 				// take one arg, no return value
 				requiredParamCount = 1;
@@ -173,7 +186,7 @@ public class TestAPI extends API {
 
 			default:
 				// Unrecognised platform-specific function code
-				throw new IllegalFunctionCodeException("Unrecognised platform-specific function code 0x" + String.format("%04x", functionCodeValue));
+				throw new IllegalFunctionCodeException("Unrecognised platform-specific function code 0x" + String.format("%04x", rawFunctionCode));
 		}
 
 		if (requiredParamCount == null || returnsValue == null)
@@ -181,16 +194,16 @@ public class TestAPI extends API {
 
 		if (paramCount != requiredParamCount)
 			throw new IllegalFunctionCodeException("Passed paramCount (" + paramCount + ") does not match platform-specific function code 0x"
-					+ String.format("%04x", functionCodeValue) + " required paramCount (" + requiredParamCount + ")");
+					+ String.format("%04x", rawFunctionCode) + " required paramCount (" + requiredParamCount + ")");
 
 		if (returnValueExpected != returnsValue)
 			throw new IllegalFunctionCodeException("Passed returnValueExpected (" + returnValueExpected + ") does not match platform-specific function code 0x"
-					+ String.format("%04x", functionCodeValue) + " return signature (" + returnsValue + ")");
+					+ String.format("%04x", rawFunctionCode) + " return signature (" + returnsValue + ")");
 	}
 
 	@Override
-	public void platformSpecificPostCheckExecute(short functionCodeValue, FunctionData functionData, MachineState state) throws ExecutionException {
-		switch (functionCodeValue) {
+	public void platformSpecificPostCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
+		switch (rawFunctionCode) {
 			case 0x0501:
 				System.out.println("Platform-specific function 0x0501 called with 0x" + String.format("%016x", functionData.value1));
 				break;
@@ -202,7 +215,7 @@ public class TestAPI extends API {
 
 			default:
 				// Unrecognised platform-specific function code
-				throw new IllegalFunctionCodeException("Unrecognised platform-specific function code 0x" + String.format("%04x", functionCodeValue));
+				throw new IllegalFunctionCodeException("Unrecognised platform-specific function code 0x" + String.format("%04x", rawFunctionCode));
 		}
 	}
 

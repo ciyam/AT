@@ -7,7 +7,7 @@ public enum OpCodeParam {
 	VALUE {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Long(Utils.getCodeValue(codeByteBuffer));
+			return Long.valueOf(Utils.getCodeValue(codeByteBuffer));
 		}
 
 		@Override
@@ -18,7 +18,7 @@ public enum OpCodeParam {
 	DEST_ADDR {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Integer(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
+			return Integer.valueOf(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
 		}
 
 		@Override
@@ -29,7 +29,7 @@ public enum OpCodeParam {
 	INDIRECT_DEST_ADDR {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Integer(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
+			return Integer.valueOf(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
 		}
 
 		@Override
@@ -40,7 +40,7 @@ public enum OpCodeParam {
 	INDIRECT_DEST_ADDR_WITH_INDEX {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Integer(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
+			return Integer.valueOf(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
 		}
 
 		@Override
@@ -51,7 +51,7 @@ public enum OpCodeParam {
 	SRC_ADDR {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Integer(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
+			return Integer.valueOf(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
 		}
 
 		@Override
@@ -62,7 +62,7 @@ public enum OpCodeParam {
 	INDIRECT_SRC_ADDR {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Integer(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
+			return Integer.valueOf(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
 		}
 
 		@Override
@@ -73,7 +73,7 @@ public enum OpCodeParam {
 	INDIRECT_SRC_ADDR_WITH_INDEX {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Integer(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
+			return Integer.valueOf(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
 		}
 
 		@Override
@@ -84,7 +84,7 @@ public enum OpCodeParam {
 	INDEX {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Integer(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
+			return Integer.valueOf(Utils.getDataAddress(codeByteBuffer, dataByteBuffer));
 		}
 
 		@Override
@@ -95,7 +95,7 @@ public enum OpCodeParam {
 	CODE_ADDR {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Integer(Utils.getCodeAddress(codeByteBuffer));
+			return Integer.valueOf(Utils.getCodeAddress(codeByteBuffer));
 		}
 
 		@Override
@@ -106,7 +106,7 @@ public enum OpCodeParam {
 	OFFSET {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Byte(Utils.getCodeOffset(codeByteBuffer));
+			return Byte.valueOf(Utils.getCodeOffset(codeByteBuffer));
 		}
 
 		@Override
@@ -117,7 +117,7 @@ public enum OpCodeParam {
 	FUNC {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Short(codeByteBuffer.getShort());
+			return Short.valueOf(codeByteBuffer.getShort());
 		}
 
 		@Override
@@ -138,7 +138,7 @@ public enum OpCodeParam {
 	BLOCK_HEIGHT {
 		@Override
 		public Object fetch(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-			return new Integer(codeByteBuffer.getInt());
+			return Integer.valueOf(codeByteBuffer.getInt());
 		}
 
 		@Override

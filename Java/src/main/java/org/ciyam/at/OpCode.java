@@ -409,7 +409,7 @@ public enum OpCode {
 	 * <tt>@addr1 <<= $addr2</tt>
 	 */
 	SHL_DAT(0x17, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
-		private static final long MAX_SHIFT = MachineState.VALUE_SIZE * 8;
+		private static final long MAX_SHIFT = MachineState.VALUE_SIZE * 8L;
 
 		@Override
 		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
@@ -424,7 +424,7 @@ public enum OpCode {
 	 * Note: new MSB bit will be zero
 	 */
 	SHR_DAT(0x18, OpCodeParam.DEST_ADDR, OpCodeParam.SRC_ADDR) {
-		private static final long MAX_SHIFT = MachineState.VALUE_SIZE * 8;
+		private static final long MAX_SHIFT = MachineState.VALUE_SIZE * 8L;
 
 		@Override
 		public void executeWithParams(MachineState state, Object... args) throws ExecutionException {
@@ -845,7 +845,7 @@ public enum OpCode {
 	public final OpCodeParam[] params;
 
 	// Create a map of opcode values to OpCode
-	private final static Map<Byte, OpCode> map = Arrays.stream(OpCode.values()).collect(Collectors.toMap(opcode -> opcode.value, opcode -> opcode));
+	private static final Map<Byte, OpCode> map = Arrays.stream(OpCode.values()).collect(Collectors.toMap(opcode -> opcode.value, opcode -> opcode));
 
 	private OpCode(int value, OpCodeParam... params) {
 		this.value = (byte) value;
@@ -876,7 +876,7 @@ public enum OpCode {
 	public abstract void executeWithParams(MachineState state, Object... args) throws ExecutionException;
 
 	public void execute(MachineState state) throws ExecutionException {
-		List<Object> args = new ArrayList<Object>();
+		List<Object> args = new ArrayList<>();
 
 		for (OpCodeParam param : this.params)
 			args.add(param.fetch(state.codeByteBuffer, state.dataByteBuffer));
@@ -893,14 +893,16 @@ public enum OpCode {
 	 * @throws ExecutionException
 	 */
 	public String disassemble(ByteBuffer codeByteBuffer, ByteBuffer dataByteBuffer) throws ExecutionException {
-		String output = this.name();
+		StringBuilder output = new StringBuilder(this.name());
 
 		int postOpcodeProgramCounter = codeByteBuffer.position();
 
-		for (OpCodeParam param : this.params)
-			output += " " + param.disassemble(codeByteBuffer, dataByteBuffer, postOpcodeProgramCounter);
+		for (OpCodeParam param : this.params) {
+			output.append(" ");
+			output.append(param.disassemble(codeByteBuffer, dataByteBuffer, postOpcodeProgramCounter));
+		}
 
-		return output;
+		return output.toString();
 	}
 
 	/**

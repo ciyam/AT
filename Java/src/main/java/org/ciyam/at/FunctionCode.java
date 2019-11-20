@@ -474,8 +474,8 @@ public enum FunctionCode {
 
 				state.b1 = digestByteBuffer.getLong();
 				state.b2 = digestByteBuffer.getLong();
-				state.b3 = 0L; // XXX Or do we leave B3 untouched?
-				state.b4 = 0L; // XXX Or do we leave B4 untouched?
+				state.b3 = 0L;
+				state.b4 = 0L;
 			} catch (NoSuchAlgorithmException e) {
 				throw new ExecutionException("No MD5 message digest service available", e);
 			}
@@ -544,7 +544,7 @@ public enum FunctionCode {
 				state.b1 = digestByteBuffer.getLong();
 				state.b2 = digestByteBuffer.getLong();
 				state.b3 = (long) digestByteBuffer.getInt() & 0xffffffffL;
-				state.b4 = 0L; // XXX Or do we leave B4 untouched?
+				state.b4 = 0L;
 			} catch (NoSuchAlgorithmException e) {
 				throw new ExecutionException("No RIPEMD160 message digest service available", e);
 			}
@@ -577,7 +577,7 @@ public enum FunctionCode {
 				digestByteBuffer.putLong(state.b1);
 				digestByteBuffer.putLong(state.b2);
 				digestByteBuffer.putInt((int) (state.b3 & 0xffffffffL));
-				// XXX: b4 ignored
+				// NOTE: b4 ignored
 
 				byte[] expectedDigest = digestByteBuffer.array();
 
@@ -762,8 +762,7 @@ public enum FunctionCode {
 			// If API set isSleeping then rewind program counter (actually codeByteBuffer) ready for being awoken
 			if (state.getIsSleeping()) {
 				// EXT_FUN_RET(1) + our function code(2) + address(4)
-				int newPosition = state.codeByteBuffer.position() - MachineState.OPCODE_SIZE - MachineState.FUNCTIONCODE_SIZE - MachineState.ADDRESS_SIZE;
-				state.codeByteBuffer.position(newPosition);
+				state.rewindCodePosition(MachineState.OPCODE_SIZE + MachineState.FUNCTIONCODE_SIZE + MachineState.ADDRESS_SIZE);
 
 				// If specific sleep height not set, default to next block
 				if (state.getSleepUntilHeight() == null)
@@ -910,12 +909,12 @@ public enum FunctionCode {
 	API_PASSTHROUGH(0x0500, 0, false) {
 		@Override
 		public void preExecuteCheck(int paramCount, boolean returnValueExpected, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.getAPI().platformSpecificPreExecuteCheck(rawFunctionCode, paramCount, returnValueExpected);
+			state.getAPI().platformSpecificPreExecuteCheck(paramCount, returnValueExpected, state, rawFunctionCode);
 		}
 
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			state.getAPI().platformSpecificPostCheckExecute(rawFunctionCode, functionData, state);
+			state.getAPI().platformSpecificPostCheckExecute(functionData, state, rawFunctionCode);
 		}
 	};
 

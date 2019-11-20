@@ -151,6 +151,11 @@ public class ACCTAPI extends API {
 	}
 
 	@Override
+	public int getMaxStepsPerRound() {
+		return 500;
+	}
+
+	@Override
 	public int getOpCodeSteps(OpCode opcode) {
 		return 1;
 	}
@@ -331,12 +336,13 @@ public class ACCTAPI extends API {
 	}
 
 	@Override
-	public void platformSpecificPreExecuteCheck(short functionCodeValue, int paramCount, boolean returnValueExpected) throws IllegalFunctionCodeException {
+	public void platformSpecificPreExecuteCheck(int paramCount, boolean returnValueExpected, MachineState state, short rawFunctionCode)
+			throws IllegalFunctionCodeException {
 		// NOT USED
 	}
 
 	@Override
-	public void platformSpecificPostCheckExecute(short functionCodeValue, FunctionData functionData, MachineState state) throws ExecutionException {
+	public void platformSpecificPostCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
 		// NOT USED
 	}
 

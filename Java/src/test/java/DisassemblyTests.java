@@ -62,8 +62,8 @@ public class DisassemblyTests {
 		codeByteBuffer.put(OpCode.EXT_FUN_DAT.value).putShort(FunctionCode.ECHO.value).putInt(1);
 		codeByteBuffer.put(OpCode.FIN_IMD.value);
 
-		// version 0003, reserved 0000, code 0200 * 1, data 0020 * 8, call stack 0010 * 4, user stack 0010 * 4
-		byte[] headerBytes = hexToBytes("0300" + "0000" + "0002" + "2000" + "1000" + "1000");
+		// version 0002, reserved 0000, code 0200 * 1, data 0020 * 8, call stack 0010 * 4, user stack 0010 * 4, minActivation = 0
+		byte[] headerBytes = hexToBytes("0200" + "0000" + "0002" + "2000" + "1000" + "1000" + "0000000000000000");
 		byte[] codeBytes = codeByteBuffer.array();
 		byte[] dataBytes = new byte[0];
 
@@ -81,8 +81,8 @@ public class DisassemblyTests {
 		codeByteBuffer.put(hexToBytes("0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"));
 		codeByteBuffer.put(hexToBytes("000000000000"));
 
-		// version 0003, reserved 0000, code 0200 * 1, data 0020 * 8, call stack 0010 * 4, user stack 0010 * 4
-		byte[] headerBytes = hexToBytes("0300" + "0000" + "0002" + "2000" + "1000" + "1000");
+		// version 0002, reserved 0000, code 0200 * 1, data 0020 * 8, call stack 0010 * 4, user stack 0010 * 4, minActivation = 0
+		byte[] headerBytes = hexToBytes("0200" + "0000" + "0002" + "2000" + "1000" + "1000" + "0000000000000000");
 		byte[] codeBytes = codeByteBuffer.array();
 		byte[] dataBytes = new byte[0];
 

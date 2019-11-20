@@ -11,7 +11,8 @@ import java.util.Map;
 public class MachineState {
 
 	/** Header bytes length */
-	public static final int HEADER_LENGTH = 2 + 2 + 2 + 2 + 2 + 2; // version reserved code data call-stack user-stack
+	// version + reserved + code + data + call-stack + user-stack + min-activation-amount
+	public static final int HEADER_LENGTH = 2 + 2 + 2 + 2 + 2 + 2 + 8;
 
 	/** Size of one OpCode - typically 1 byte (byte) */
 	public static final int OPCODE_SIZE = 1;
@@ -27,9 +28,6 @@ public class MachineState {
 
 	/** Maximum value for an address in the code segment */
 	public static final int MAX_CODE_ADDRESS = 0x0000ffff;
-
-	/** Maximum number of steps per execution round */
-	public static final int MAX_STEPS = 500;
 
 	private static class VersionedConstants {
 		/** Bytes per code page */
@@ -50,10 +48,10 @@ public class MachineState {
 	}
 
 	/** Map of constants (e.g. CODE_PAGE_SIZE) by AT version */
-	private static final Map<Short, VersionedConstants> VERSIONED_CONSTANTS = new HashMap<Short, VersionedConstants>();
+	private static final Map<Short, VersionedConstants> VERSIONED_CONSTANTS = new HashMap<>();
 	static {
 		VERSIONED_CONSTANTS.put((short) 1, new VersionedConstants(256, 256, 256, 256));
-		VERSIONED_CONSTANTS.put((short) 3, new VersionedConstants(OPCODE_SIZE, VALUE_SIZE, ADDRESS_SIZE, VALUE_SIZE));
+		VERSIONED_CONSTANTS.put((short) 2, new VersionedConstants(OPCODE_SIZE, VALUE_SIZE, ADDRESS_SIZE, VALUE_SIZE));
 	}
 
 	// Set during construction
@@ -63,6 +61,7 @@ public class MachineState {
 	public final short numDataPages;
 	public final short numCallStackPages;
 	public final short numUserStackPages;
+	public final long minActivationAmount;
 
 	private final byte[] headerBytes;
 
@@ -148,7 +147,7 @@ public class MachineState {
 
 		this.version = byteBuffer.getShort();
 		if (this.version < 1)
-			throw new IllegalArgumentException("Version must be >= 0");
+			throw new IllegalArgumentException("Version must be > 0");
 
 		this.constants = VERSIONED_CONSTANTS.get(this.version);
 		if (this.constants == null)
@@ -171,6 +170,8 @@ public class MachineState {
 		this.numUserStackPages = byteBuffer.getShort();
 		if (this.numUserStackPages < 0)
 			throw new IllegalArgumentException("Number of user stack pages must be >= 0");
+
+		this.minActivationAmount = byteBuffer.getLong();
 
 		// Header OK - set up code and data buffers
 		this.codeByteBuffer = ByteBuffer.allocate(this.numCodePages * this.constants.CODE_PAGE_SIZE).order(ByteOrder.LITTLE_ENDIAN);
@@ -207,7 +208,7 @@ public class MachineState {
 		commonFinalConstruction();
 	}
 
-	/** For creating a new machine state */
+	/** For creating a new machine state - used in tests */
 	public MachineState(API api, LoggerInterface logger, byte[] headerBytes, byte[] codeBytes, byte[] dataBytes) {
 		this(api, logger, headerBytes);
 
@@ -236,6 +237,14 @@ public class MachineState {
 		this.isFinished = false;
 		this.hadFatalError = false;
 		this.previousBalance = 0;
+
+		// If we have a minimum activation amount then create AT in frozen state, requiring that amount to unfreeze.
+		// If creator also sends funds with creation then AT will unfreeze on first call.
+		if (this.minActivationAmount > 0) {
+			this.isFrozen = true;
+			// -1 because current balance has to exceed frozenBalance to unfreeze AT
+			this.frozenBalance = this.minActivationAmount - 1;
+		}
 	}
 
 	// Getters / setters
@@ -275,8 +284,8 @@ public class MachineState {
 		return this.sleepUntilHeight;
 	}
 
-	/* package */ void setSleepUntilHeight(Integer address) {
-		this.sleepUntilHeight = address;
+	/* package */ void setSleepUntilHeight(Integer height) {
+		this.sleepUntilHeight = height;
 	}
 
 	public boolean getIsStopped() {
@@ -319,7 +328,6 @@ public class MachineState {
 		this.hadFatalError = hadFatalError;
 	}
 
-	// No corresponding setters due to package-scope - see above
 	public long getA1() {
 		return this.a1;
 	}
@@ -334,6 +342,18 @@ public class MachineState {
 
 	public long getA4() {
 		return this.a4;
+	}
+
+	public byte[] getA() {
+		ByteBuffer byteBuffer = ByteBuffer.allocate(4 * 8);
+		byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+
+		byteBuffer.putLong(this.a1);
+		byteBuffer.putLong(this.a2);
+		byteBuffer.putLong(this.a3);
+		byteBuffer.putLong(this.a4);
+
+		return byteBuffer.array();
 	}
 
 	public long getB1() {
@@ -351,7 +371,18 @@ public class MachineState {
 	public long getB4() {
 		return this.b4;
 	}
-	// End of package-scope pseudo-registers
+
+	public byte[] getB() {
+		ByteBuffer byteBuffer = ByteBuffer.allocate(4 * 8);
+		byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+
+		byteBuffer.putLong(this.b1);
+		byteBuffer.putLong(this.b2);
+		byteBuffer.putLong(this.b3);
+		byteBuffer.putLong(this.b4);
+
+		return byteBuffer.array();
+	}
 
 	public int getCurrentBlockHeight() {
 		return this.currentBlockHeight;
@@ -389,7 +420,79 @@ public class MachineState {
 		return this.isFirstOpCodeAfterSleeping;
 	}
 
+	/**
+	 * Rewinds program counter by amount.
+	 * <p>
+	 * Actually rewinds codeByteBuffer's position, not PC, as the later is synchronized from the former after each OpCode is executed.
+	 * 
+	 * @param offset
+	 */
+	/* package */ void rewindCodePosition(int offset) {
+		this.codeByteBuffer.position(this.codeByteBuffer.position() - offset);
+	}
+
 	// Serialization
+
+	public static byte[] toCreationBytes(short version, byte[] codeBytes, byte[] dataBytes, short numCallStackPages, short numUserStackPages, long minActivationAmount) {
+		if (version < 1)
+			throw new IllegalArgumentException("Version must be > 0");
+
+		VersionedConstants constants = VERSIONED_CONSTANTS.get(version);
+		if (constants == null)
+			throw new IllegalArgumentException("Version " + version + " unsupported");
+
+		// Calculate number of code pages
+		if (codeBytes.length == 0)
+			throw new IllegalArgumentException("Empty code bytes");
+		short numCodePages = (short) (((codeBytes.length - 1) / constants.CODE_PAGE_SIZE) + 1);
+
+		// Calculate number of data pages
+		if (dataBytes.length == 0)
+			throw new IllegalArgumentException("Empty data bytes");
+		short numDataPages = (short) (((dataBytes.length - 1) / constants.DATA_PAGE_SIZE) + 1);
+
+		int creationBytesLength = HEADER_LENGTH + numCodePages * constants.CODE_PAGE_SIZE + numDataPages + constants.DATA_PAGE_SIZE;
+		byte[] creationBytes = new byte[creationBytesLength];
+
+		ByteBuffer byteBuffer = ByteBuffer.wrap(creationBytes);
+		byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+
+		// Header bytes:
+
+		// Version
+		byteBuffer.putShort(version);
+
+		// Reserved
+		byteBuffer.putShort((short) 0);
+
+		// Code length
+		byteBuffer.putShort(numCodePages);
+
+		// Data length
+		byteBuffer.putShort(numDataPages);
+
+		// Call stack length
+		byteBuffer.putShort(numCallStackPages);
+
+		// User stack length
+		byteBuffer.putShort(numUserStackPages);
+
+		// Minimum activation amount
+		byteBuffer.putLong(minActivationAmount);
+
+		// Code bytes
+		System.arraycopy(codeBytes, 0, creationBytes, HEADER_LENGTH, codeBytes.length);
+
+		// Data bytes
+		System.arraycopy(dataBytes, 0, creationBytes, HEADER_LENGTH + numCodePages * constants.CODE_PAGE_SIZE, dataBytes.length);
+
+		return creationBytes;
+	}
+
+	/** Returns code bytes only as these are read-only so no need to be duplicated in every serialized state */
+	public byte[] getCodeBytes() {
+		return this.codeByteBuffer.array();
+	}
 
 	/** For serializing a machine state */
 	public byte[] toBytes() {
@@ -398,9 +501,6 @@ public class MachineState {
 		try {
 			// Header first
 			bytes.write(this.headerBytes);
-
-			// Code
-			bytes.write(this.codeByteBuffer.array());
 
 			// Data
 			bytes.write(this.dataByteBuffer.array());
@@ -473,7 +573,7 @@ public class MachineState {
 	}
 
 	/** For restoring a previously serialized machine state */
-	public static MachineState fromBytes(API api, LoggerInterface logger, byte[] bytes) {
+	public static MachineState fromBytes(API api, LoggerInterface logger, byte[] bytes, byte[] codeBytes) {
 		ByteBuffer byteBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
 
 		byte[] headerBytes = new byte[HEADER_LENGTH];
@@ -481,8 +581,9 @@ public class MachineState {
 
 		MachineState state = new MachineState(api, logger, headerBytes);
 
-		byte[] codeBytes = new byte[state.codeByteBuffer.capacity()];
-		byteBuffer.get(codeBytes);
+		if (codeBytes.length != state.codeByteBuffer.capacity())
+			throw new IllegalStateException("Passed codeBytes does not match length in header");
+
 		System.arraycopy(codeBytes, 0, state.codeByteBuffer.array(), 0, codeBytes.length);
 
 		byte[] dataBytes = new byte[state.dataByteBuffer.capacity()];
@@ -631,7 +732,9 @@ public class MachineState {
 		this.isFrozen = false;
 		this.frozenBalance = null;
 
+		// Cache useful info from API
 		long feePerStep = this.api.getFeePerStep();
+		int maxSteps = api.getMaxStepsPerRound();
 
 		// Set byte buffer position using program counter
 		codeByteBuffer.position(this.programCounter);
@@ -650,8 +753,8 @@ public class MachineState {
 				int opcodeSteps = this.api.getOpCodeSteps(nextOpCode);
 				long opcodeFee = opcodeSteps * feePerStep;
 
-				if (this.steps + opcodeSteps > MAX_STEPS) {
-					logger.debug("Enforced sleep due to exceeding maximum number of steps (" + MAX_STEPS + ") per execution round");
+				if (this.steps + opcodeSteps > maxSteps) {
+					logger.debug("Enforced sleep due to exceeding maximum number of steps (" + maxSteps + ") per execution round");
 					this.isSleeping = true;
 					break;
 				}
@@ -717,7 +820,7 @@ public class MachineState {
 
 	/** Return disassembly of code bytes */
 	public String disassemble() throws ExecutionException {
-		String output = "";
+		StringBuilder output = new StringBuilder();
 
 		codeByteBuffer.position(0);
 
@@ -730,13 +833,13 @@ public class MachineState {
 			if (nextOpCode == null)
 				throw new IllegalOperationException("OpCode 0x" + String.format("%02x", rawOpCode) + " not recognised");
 
-			if (!output.isEmpty())
-				output += "\n";
+			if (output.length() != 0)
+				output.append("\n");
 
-			output += "[PC: " + String.format("%04x", codeByteBuffer.position() - 1) + "] " + nextOpCode.disassemble(codeByteBuffer, dataByteBuffer);
+			output.append(String.format("[PC: %04x] %s", codeByteBuffer.position() - 1,nextOpCode.disassemble(codeByteBuffer, dataByteBuffer)));
 		}
 
-		return output;
+		return output.toString();
 	}
 
 }

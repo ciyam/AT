@@ -1,0 +1,11 @@
+# How to import CIYAM AT JAR into your project
+
+# Assumes:
+# your project is called MY-PROJECT
+# your project has local repository in MY-PROJECT/lib/
+# CIYAM AT JAR pathname is in ${CIYAM_AT_JAR}
+
+CIYAM_AT_VERSION=1.2
+CIYAM_AT_JAR=../CIYAM-AT/Java/target/AT-${CIYAM_AT_VERSION}.jar
+cd MY-PROJECT
+mvn install:install-file -DlocalRepositoryPath=lib/ -Dfile=${CIYAM_AT_JAR} -DgroupId=org.ciyam -DartifactId=at -Dpackaging=jar -Dversion=${CIYAM_AT_VERSION}

@@ -14,8 +14,7 @@ import org.junit.BeforeClass;
 
 public abstract class ExecutableTest {
 
-	public static final int CODE_OFFSET = 6 * 2;
-	public static final int DATA_OFFSET = CODE_OFFSET + 0x0200;
+	public static final int DATA_OFFSET = 6 * 2 + 8;
 	public static final int CALL_STACK_OFFSET = DATA_OFFSET + 0x0020 * 8;
 
 	public TestLogger logger;
@@ -49,8 +48,8 @@ public abstract class ExecutableTest {
 	}
 
 	protected void execute(boolean onceOnly) {
-		// version 0003, reserved 0000, code 0200 * 1, data 0020 * 8, call stack 0010 * 4, user stack 0010 * 8
-		byte[] headerBytes = hexToBytes("0300" + "0000" + "0002" + "2000" + "1000" + "1000");
+		// version 0002, reserved 0000, code 0200 * 1, data 0020 * 8, call stack 0010 * 4, user stack 0010 * 4, minActivation = 0
+		byte[] headerBytes = hexToBytes("0200" + "0000" + "0002" + "2000" + "1000" + "1000" + "0000000000000000");
 		byte[] codeBytes = codeByteBuffer.array();
 		byte[] dataBytes = new byte[0];
 
@@ -82,6 +81,10 @@ public abstract class ExecutableTest {
 
 			System.out.println("Frozen: " + state.getIsFrozen());
 
+			long newBalance = state.getCurrentBalance();
+			System.out.println("New balance: " + newBalance);
+			api.setCurrentBalance(newBalance);
+
 			// Bump block height
 			api.bumpCurrentBlockHeight();
 		} while (!onceOnly && !state.getIsFinished());
@@ -90,7 +93,7 @@ public abstract class ExecutableTest {
 		byte[] stateBytes = state.toBytes();
 
 		// We know how the state will be serialized so we can extract values
-		// header(6) + code(0x0200) + data(0x0020 * 8) + callStack length(4) + callStack + userStack length(4) + userStack
+		// header(6) + data(0x0020 * 8) + callStack length(4) + callStack + userStack length(4) + userStack
 
 		stateByteBuffer = ByteBuffer.wrap(stateBytes).order(ByteOrder.LITTLE_ENDIAN);
 		callStackSize = stateByteBuffer.getInt(CALL_STACK_OFFSET);

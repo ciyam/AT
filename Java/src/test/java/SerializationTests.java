@@ -27,7 +27,7 @@ public class SerializationTests {
 	public void beforeTest() {
 		logger = new TestLogger();
 		api = new TestAPI();
-		codeByteBuffer = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN);
+		codeByteBuffer = ByteBuffer.allocate(512).order(ByteOrder.LITTLE_ENDIAN);
 	}
 
 	@After
@@ -38,8 +38,8 @@ public class SerializationTests {
 	}
 
 	private byte[] simulate() {
-		// version 0003, reserved 0000, code 0100 * 1, data 0020 * 8, call stack 0010 * 4, user stack 0010 * 4
-		byte[] headerBytes = hexToBytes("0300" + "0000" + "0001" + "2000" + "1000" + "1000");
+		// version 0002, reserved 0000, code 0200 * 1, data 0020 * 8, call stack 0010 * 4, user stack 0010 * 4, minActivation = 0
+		byte[] headerBytes = hexToBytes("0200" + "0000" + "0002" + "2000" + "1000" + "1000" + "0000000000000000");
 		byte[] codeBytes = codeByteBuffer.array();
 		byte[] dataBytes = new byte[0];
 
@@ -49,7 +49,8 @@ public class SerializationTests {
 	}
 
 	private byte[] continueSimulation(byte[] savedState) {
-		state = MachineState.fromBytes(api, logger, savedState);
+		byte[] codeBytes = codeByteBuffer.array();
+		state = MachineState.fromBytes(api, logger, savedState, codeBytes);
 
 		// Pretend we're on next block
 		api.bumpCurrentBlockHeight();
@@ -61,10 +62,13 @@ public class SerializationTests {
 		state.execute();
 
 		byte[] stateBytes = state.toBytes();
-		MachineState restoredState = MachineState.fromBytes(api, logger, stateBytes);
+		byte[] codeBytes = state.getCodeBytes();
+		MachineState restoredState = MachineState.fromBytes(api, logger, stateBytes, codeBytes);
 		byte[] restoredStateBytes = restoredState.toBytes();
+		byte[] restoredCodeBytes = state.getCodeBytes();
 
 		assertTrue("Serialization->Deserialization->Reserialization error", Arrays.equals(stateBytes, restoredStateBytes));
+		assertTrue("Serialization->Deserialization->Reserialization error", Arrays.equals(codeBytes, restoredCodeBytes));
 
 		return stateBytes;
 	}

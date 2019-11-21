@@ -451,7 +451,7 @@ public class MachineState {
 			throw new IllegalArgumentException("Empty data bytes");
 		short numDataPages = (short) (((dataBytes.length - 1) / constants.DATA_PAGE_SIZE) + 1);
 
-		int creationBytesLength = HEADER_LENGTH + numCodePages * constants.CODE_PAGE_SIZE + numDataPages + constants.DATA_PAGE_SIZE;
+		int creationBytesLength = HEADER_LENGTH + numCodePages * constants.CODE_PAGE_SIZE + numDataPages * constants.DATA_PAGE_SIZE;
 		byte[] creationBytes = new byte[creationBytesLength];
 
 		ByteBuffer byteBuffer = ByteBuffer.wrap(creationBytes);
